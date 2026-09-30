@@ -34,7 +34,7 @@ Keep four things distinct: the original drawing, numerical source data, an appro
 
 ## 2. Coordinates, strokes, and the source of truth
 
-Screen coordinates are presentation only. Normalize horizontal coordinates into u ∈ [0,1] and vertical coordinates into amplitude a ∈ [-1,1]. For a canvas-local point (px,py), the basic mapping is u = px/width and a = 1 − 2py/height; apply the inverse viewport transform first when zoomed or panned.
+Screen coordinates are presentation only. Normalize horizontal coordinates into u ∈ [0,1] and vertical coordinates into amplitude a ∈ [-1,1]. For a canvas-local point (px,py), the basic mapping is u = px/width and a = 1 − 2py/height; apply the inverse viewport transform first when zoomed or panned. Envelope axes use different mappings: gain = 1 − py/height; a logarithmic pitch view maps f = f_min · (f_max/f_min)^(1 − py/height). Store values in Hz or linear gain after conversion, never generic waveform amplitude.
 
 Store strokes in pointer-event order with a tool and normalized points. Do not use pointer travel time as signal time: drawing slowly or quickly must produce the same waveform. Pressure and brush thickness do not alter signal values in v1.
 
@@ -52,7 +52,7 @@ Suggested modules:
 
 | Module | Responsibility |
 | --- | --- |
-| editor | Pointer capture, viewport, tools, history, numeric editing |
+| editor | Pointer capture, viewport, oscillator selection/colors, waveform/pitch/gain lanes, history, numeric editing |
 | signal | Coordinates, stroke resolution, sampling, interpolation, validation |
 | analysis | FFT adapter, fitting, error metrics, spectrum |
 | audio | Audio context lifecycle, source graph, conditioning, transitions |
@@ -66,18 +66,26 @@ Proposed persisted project fields:
 ~~~text
 schemaVersion, algorithmVersion, projectId, name
 activeMode
-oneCycle: { strokes, sourceResolution, repetitionHz, smoothing, seamPolicy }
+oscillators: [{
+  id, name, colorKey, lineStyle, muted, soloed,
+  waveform: { strokes, sourceResolution, smoothing, seamPolicy },
+  baseHz, initialPhaseCycles,
+  model: { kind, harmonicCount, fitSettings }, selectedSource,
+  pitch: { points, baseHz, axis: "logHz", interpolation: "log-linear" },
+  gain: { points, interpolation: "linear", initialGain: 1 }
+}]
+selectedOscillatorId
+composition: { durationSeconds, loop, seamPolicy }
 timeline: { strokes, durationSeconds, smoothing, loop, seamPolicy }
-model: { kind, harmonicCount, fitSettings }
-playback: { selectedSource, monitorGain, conditioningSettings }
-exportDefaults: { sampleRate, durationSeconds, format }
+playback: { monitorGain, conditioningSettings }
+exportDefaults: { sampleRate, durationSeconds, format, target }
 ~~~
 
-Store both mode workspaces and restore transport as stopped. Persist editable inputs; derived results can be cached but must be recomputed when algorithm versions change. Runtime typed arrays are not serialized as browser-specific objects in portable JSON.
+Store all three mode workspaces and restore transport as stopped. Each Envelope carrier links to its oscillator's current One-cycle drawing/model; its pitch curve remains independent of that oscillator's scalar base frequency once edited. Persist editable inputs; derived results can be cached but must be recomputed when algorithm versions change. Runtime typed arrays are not serialized as browser-specific objects in portable JSON.
 
-Use Float64Array for coefficient fitting and error analysis, Float32Array at Web Audio boundaries, and signed 16-bit PCM only at WAV encoding. Source data remains unquantized by PCM export. Enforce the PRD's 20,000-point project limit, periodic grid cap, and import-size limit before allocation.
+Use Float64Array for coefficient fitting and error analysis, Float32Array at Web Audio boundaries, and signed 16-bit PCM only at WAV encoding. Source data remains unquantized by PCM export. The proposed initial cap is four oscillator voices; the 20,000-point limit is shared across all workspaces and lanes. Enforce the PRD's 20,000-point project limit, periodic grid cap, and import-size limit before allocation.
 
-A derived result includes project ID, source revision, settings hash, algorithm version, mode, units, and any applicable sample rate. A cache key must include all of these; pitch and sample rate affect the audio bandwidth even when the drawing has not changed.
+A derived result includes project ID, relevant oscillator IDs, source revision, settings hash, algorithm version, mode, units, and any applicable sample rate. A cache key must include all of these; pitch and sample rate affect the audio bandwidth even when the drawing has not changed.
 
 ## 4. The three mathematical outputs
 
@@ -91,7 +99,7 @@ The evaluator plus its table is a complete function definition. A long array is 
 
 ### B. Sine fit
 
-For each candidate integer harmonic m, fit C + a cos(2πm·u) + b sin(2πm·u) against the uniform source samples. In a full periodic grid, the corresponding DFT coefficients provide this least-squares fit.
+For each candidate integer harmonic m, fit C + a cos(2πm·u) + b sin(2πm·u) against the uniform source samples. In a full periodic grid, the corresponding DFT coefficients provide this least-squares fit. Fit each oscillator independently; an arbitrary multi-oscillator mix is not assumed to be one tone.
 
 Convert to the user-facing form A sin(2π·f·t + φ) + C using:
 
@@ -121,7 +129,7 @@ A complete discrete transform reconstructs the source grid to numerical precisio
 
 Prototype OscillatorNode with PeriodicWave. Keep the repetition rate independent of source-table length; looping an integer-length buffer at the device rate can quantize the desired frequency if used carelessly.
 
-For a requested f0 and sample rate Fs, retain only harmonic k satisfying k·f0 < Fs/2. The audio path may apply a documented transition band below Nyquist. Rebuild the playable coefficients when f0 or Fs changes, and report the number removed.
+For each oscillator at a requested f0 and sample rate Fs, retain only harmonic k satisfying k·f0 < Fs/2. The audio path may apply a documented transition band below Nyquist. Rebuild the playable coefficients when f0 or Fs changes, and report the number removed.
 
 Drawing playback uses the full resolved sample representation before audio bandwidth limits; Approximation playback uses the chosen sine/Fourier model. Its model coefficient cap must not silently become a source-data cap.
 
@@ -139,11 +147,11 @@ Loop boundaries need an explicit policy. Preserve the source, show the seam, and
 
 ### Shared output contract
 
-Apply band limiting, DC removal, peak attenuation, a playback envelope, and monitor gain in a versioned order. Define DC removal as subtracting the rendered steady-state mean before envelopes; do not use an undocumented high-pass filter that would change low frequencies and phase.
+For direct periodic/timeline signals, apply band limiting, DC removal, peak attenuation, a transport envelope, and monitor gain in a versioned order. Envelope composition uses the per-carrier DC/modulation ordering below; mixing applies headroom once to the included voices. For direct signals, define DC removal explicitly from their source/rendered mean rather than introducing an undocumented high-pass filter. For envelope voices, subtract carrier DC before modulation, not the finite mixed-output mean afterward.
 
 Choose attenuation g = min(1, 0.95/P), with g = 1 for silence. P must bound the rendered waveform at the chosen rate, not just the input table. The periodic prototype must validate peak estimates on dense/offline renders and include a conservative bound if required to meet the output ceiling. Never silently normalize quiet signals upward.
 
-Preview and offline export must construct the same source and processing graph. Start/stop ramps are transport behavior; exporting a finite duration includes its own documented start/end ramps. Formula exports identify the unconditioned model, while rendered-output exports reproduce conditioning numerically.
+Preview and offline export must construct the same source and processing graph, including per-oscillator envelopes, phase, mute/solo, and global mix attenuation. Start/stop ramps are transport behavior; exporting a finite duration includes its own documented start/end ramps. Formula exports identify the unconditioned model, while rendered-output exports reproduce conditioning numerically.
 
 Read Fs from the audio context. WAV exports explicitly request 44.1 or 48 kHz and recompute at that rate. The 480,000-sample cap applies to 10-second, 48 kHz exports; preview allocation uses actual Fs and an explicit memory budget. If an unusual device rate exceeds the budget, report the supported limit rather than silently altering time.
 
@@ -157,7 +165,7 @@ Post analysis jobs with increasing revisions. A worker response is accepted only
 
 Use a small transport state machine: stopped, preparing, playing, stopping, unavailable. Play creates/resumes the audio context from a user action; Stop wins over pending render completion. A late job must never restart playback. Clean up source nodes and ramps when replacing a source, closing a project, or unloading.
 
-For a 10-second, 48 kHz mono buffer, Float32 samples occupy 1,920,000 bytes (about 1.83 MiB). Oversampling, Float64 analysis, history, and temporary FFT buffers multiply that cost; account for the whole working set. Target at most 128 MiB of app-owned signal buffers on the baseline desktop and benchmark the worst case.
+For a 10-second, 48 kHz mono buffer, Float32 samples occupy 1,920,000 bytes (about 1.83 MiB). Four oscillator buffers plus a mix occupy about 9.16 MiB before oversampling/analysis overhead; avoid keeping every intermediate buffer alive. Oversampling, Float64 analysis, history, and temporary FFT buffers multiply that cost; account for the whole working set. Target at most 128 MiB of app-owned signal buffers on the baseline desktop and benchmark the worst case.
 
 Show an immediate pending/progress state for slow jobs. On a renderer failure, keep the drawing and last valid analysis; stop unsafe or stale playback and provide a retry action. Storage failure must not prevent in-memory editing or downloading the project.
 
@@ -188,12 +196,61 @@ The foundation spike must answer these implementation questions before audio wor
 
 If the prototype requires a different engine, update this document and the affected issues with evidence. Avoid adding a backend merely to move manageable browser work elsewhere.
 
-## 9. How pitch and volume drawing would extend this design
+## 9. Pitch and volume drawing — first-release requirements
 
-Direct waveform drawing is the proposed v1. An envelope is a different signal applied to a carrier:
+The user explicitly included both pitch and volume envelopes in v1. Each oscillator combines its waveform with synchronized gain and pitch curves:
 
-s(t) = A(t) · p(frac(θ(t))), with θ(t) = θ0 + ∫[0…t] f(τ) dτ.
+s_j(t) = g_j(t) · p_j(frac(θ_j(t))),  
+θ_j(t) = θ0,j + ∫[0…t] f_j(τ) dτ.
 
-A(t) is a gain envelope and f(t) is instantaneous frequency in Hz. Multiplying t by a changing f(t) is generally incorrect; integrating frequency maintains the intended phase. Fast changes introduce additional bandwidth and require smoothing/band limiting.
+Phase θ is in cycles; a sine carrier uses sin(2πθ + φ). Multiplying t by a changing f(t) is generally incorrect: its derivative adds an unintended t·f′(t) term to instantaneous frequency. Preserve phase across knots and rendering chunks.
 
-Adding envelope lanes would require units and bounds per lane, a phase-continuous renderer, interpolation rules for automation, synchronized editing, and new project/export schemas. Layering adds mixing and headroom decisions. These are useful next steps, but should be separately scoped if included in the first release.
+Pitch is positive, stored in Hz, and drawn on a logarithmic vertical axis. Between knots (ti,fi) and (ti+1,fi+1), use log-linear interpolation. Let τ = t−ti and q = ln(fi+1/fi)/(ti+1−ti):
+
+- f(t) = fi·exp(qτ).
+- Integrated phase increment is fi·expm1(qτ)/q.
+- In the q → 0 limit, use fi·τ to avoid numerical instability.
+
+Precompute phase increments at knot boundaries, then evaluate arbitrary times from the appropriate prefix plus within-segment integral. This supports exact phase handling for the declared interpolation and reproducible offline/code exports. Validate constant frequency, octave sweeps, near-equal endpoints, split versus unsplit rendering, and exact knot boundaries.
+
+Gain uses linear interpolation between values in [0,1]. It starts at 1; erasing gain writes zero. Untouched pitch retains its base value (initially 440 Hz), and pitch erasure resets to that base, never zero. Editing one oscillator/lane must not modify the others. Shared duration changes stretch every envelope together. Original point limits include all lanes.
+
+The UI should show waveform, pitch, and gain with a shared oscillator identity, common time cursor for envelope views, and visible units. Numeric editing provides exact values when freehand precision is insufficient.
+
+### Rendering implications
+
+Remove each carrier's DC before applying modulation to its audible signal. Retain the original DC in the source function. Do not subtract a finite composition's mean afterward, because that would inject nonzero values into intentionally silent gain intervals.
+
+A native prototype can schedule OscillatorNode frequency automation and GainNode gain automation using the declared interpolation. Compare it against the analytic phase-integrated reference. A custom oversampled buffer renderer or AudioWorklet is warranted if native scheduling, bandwidth handling, or cross-browser fidelity fails the measured criteria.
+
+Pitch and amplitude modulation introduce sidebands. A cutoff derived only from one fixed f0 is insufficient to establish modulation quality. Test fast pitch sweeps, fast gain transitions, high harmonics, and near-Nyquist carriers against an oversampled reference; report the accepted bandwidth/transition policy and any altered output.
+
+Zero gain must not be undone by normalization. Use one attenuation factor for the complete active mix; preserve relative oscillator levels and within-clip dynamics. Document finite filter/transition tails at gain boundaries; an all-zero envelope must render exact silence.
+
+For finite clips, initial phase defaults to zero cycles per oscillator. Looping a clip with a non-integer phase advance can create a seam even when envelope endpoints match. Use the finite-loop seam policy and show any boundary processing rather than claiming phase continuity across an arbitrary loop reset.
+
+Export per-oscillator pitch/gain evaluators, integrated phase, carrier data/model, and complete composition/mix evaluators. Project files must carry all interpolation, phase, timing, carrier-selection, and processing settings.
+
+## 10. Distinct oscillator colors, identity, and mixing
+
+The first release supports multiple oscillators, with a proposed cap of four. A new project starts with one. Each voice has a persistent ID, name, color key, line-style cue, waveform, model selection, base frequency, initial phase, envelopes, mute, and solo.
+
+Assign distinct palette colors to active oscillators. Use the same color for its waveform drawing, pitch curve, gain curve, legend chip, and selection/control accents. Keep colors stable on reorder, save, and reload. Duplication creates a new ID and a different available color; importing a conflicting/invalid palette assignment resolves it deterministically with a visible legend.
+
+Provide labels and line patterns/selection weight alongside color and verify contrast on supported backgrounds. Only the selected oscillator accepts strokes; the others remain inspectable. A selected-only view reduces overlap. Plot visibility is independent of mute, so hiding a curve does not change sound.
+
+The raw mix is s_mix(t) = Σ_j s_j(t) over included voices. Mute always excludes a voice; if any Solo is enabled, include only soloed, unmuted voices. With no included voices, return exact silence. Start included oscillators using one scheduled audio time and preserve their declared relative phases.
+
+Apply global headroom attenuation after mixing and before the shared transport ramp/master monitor gain. Keep it fixed over each rendered clip; per-frame or per-voice loudness normalization would change the requested balance or envelopes. Show any applied attenuation. Crossfade/ramp live mute/solo and model changes so state changes do not create avoidable discontinuities.
+
+Expose individual oscillator traces and the final mix in a neutral, heavier line. A phase-domain overlay compares shapes; a time-domain overlay compares actual signals at their own frequencies. Label these views so shape alignment is not mistaken for time alignment.
+
+Keep the standalone direct-amplitude Timeline workspace separate from the oscillator bank's output mode. Preserve it while switching modes; do not silently add it as another mixer channel.
+
+Test two identical in-phase oscillators, opposite-phase cancellation, different-frequency beating, muted/soloed combinations, independent envelope edits, all-zero gain, and maximum four-voice renders. Function exports must retain the sum of independent phase functions rather than inventing a shared fundamental.
+
+## 11. First-release decisions to confirm through implementation evidence
+
+The product requirements now include waveform/pitch/volume drawing and distinct oscillator colors. The four-voice limit, resource budgets, browser baseline, palette, and exact renderer/filter remain proposed engineering decisions.
+
+The foundation spike must cover the full four-voice envelope case before its engine choice is considered settled. If performance requires a lower resolution, a different renderer, or a different limit, document the measurement and update the PRD and issues explicitly instead of silently discarding drawing detail or envelope behavior.
