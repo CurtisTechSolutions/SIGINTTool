@@ -42,7 +42,7 @@ export function installModulation(app){
     const options=[['','Choose a clip…'],...available.entries()];
     const set=(key,value)=>app.edit(p=>{p.modulation[key]=value;});
     grid.replaceChildren(
-      field('Enable modulation',check('mod-enabled',m.enabled,v=>{if(v&&!m.sourceId){app.status('Choose a modulator clip first.',true);refresh();return;}set('enabled',v);})),
+      field('Enable modulation',check('mod-enabled',m.enabled,v=>{if(v&&(!m.sourceId||(m.target==='asset'&&!m.carrierId))){app.status('Choose both the modulator and its carrier before enabling this route.',true);refresh();return;}set('enabled',v);})),
       field('Modulator clip',select('mod-source',options,m.sourceId,id=>attachAudio(id,'sourceId'))),
       field('Effect',select('mod-mode',[['volume','Volume follower'],['ring','Ring modulation'],['pitch','Pitch / varispeed']],m.mode,value=>set('mode',value))),
       field('Apply to',select('mod-target',[['mix','Current sound / mix'],...(p.mode==='timeline'?[]:[['oscillator','One oscillator']]),['asset','Another audio clip']],m.target,value=>{
@@ -63,7 +63,7 @@ export function installModulation(app){
       :m.mode==='ring'?'y(t) = carrier(t) × [1 − d(t) + d(t) × modulator(t)]'
       :m.target==='oscillator'?'f(t) = basePitch(t) × 2^(D(t) × modulator(t) / 12); phase = integral of frequency'
       :'readhead(t) = integral of 2^(D(t) × modulator(t) / 12); y(t) = carrier(readhead(t)). Pitch and timing change together.';
-    if(!m.sourceLoop)formula.textContent+=' Outside the modulator clip: unchanged carrier.';
+    if(!m.sourceLoop)formula.textContent+=m.mode==='pitch'?' Outside the modulator clip: base pitch/rate resumes; accumulated phase and position are preserved.':' Outside the modulator clip: unchanged carrier.';
     audition.disabled=!m.sourceId;
     if(m.sourceId){
       const a=app.assets[m.sourceId]||await app.store.get('audio',m.sourceId);if(token!==refreshToken)return;
