@@ -27,7 +27,9 @@ export class Transport {
       if(!Context)throw new Error('Web Audio is unavailable in this browser');
       this.context=new Context();this.master=this.context.createGain();this.master.gain.value=this.volume;this.master.connect(this.context.destination);
     }
-    await this.context.resume();
+    let timeout;
+    try{await Promise.race([this.context.resume(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Audio could not start. Check the browser permission and output device, then press Play again.')),5000);})]);}
+    finally{clearTimeout(timeout);}
     if(this.context.state!=='running')throw new Error('Audio is suspended. Activate Play again.');
     return this.context.sampleRate;
   }
