@@ -38,9 +38,24 @@ Default mode is **One-cycle**, with one oscillator at **440 Hz**; users can add 
 
 ## 4. Scope and signal semantics
 
+### Display axes
+
+The primary drawing canvas is a waveform view: **left to right is time; up/down is signed amplitude**. Time and frequency are different quantities and must have separate, explicitly labeled views.
+
+| View or lane | Horizontal axis | Vertical axis |
+| --- | --- | --- |
+| Waveform drawing / rendered waveform | Time, in seconds or milliseconds | Signed amplitude, centered at zero |
+| Spectrum inspection | Frequency, in Hz | Magnitude/level of each frequency component, with scale/reference shown |
+| Volume envelope | Time, in seconds or milliseconds | Linear gain, 0–1 |
+| Pitch envelope | Time, in seconds or milliseconds | Pitch frequency, in Hz |
+
+Within a fixed time window, closer waveform cycles indicate higher frequency and wider cycles indicate lower frequency. Increasing the waveform's excursion on both sides of zero increases amplitude; moving the entire waveform upward adds a DC offset instead. Amplitude influences loudness, but signed sample height is not itself a volume reading.
+
+Each oscillator keeps its assigned color in every applicable view. The spectrum is an explicitly selected inspection view; frequency-axis drawing is not required for this release. Pitch and volume remain separate, clearly labeled envelope lanes.
+
 ### One-cycle mode
 
-The horizontal axis spans one repeating period, represented internally by phase u in [0,1). The vertical axis is normalized amplitude in [-1,1]. Each oscillator has a repetition frequency f0; its source is x(t) = p(frac(f0·t)). Multiple oscillators retain independent frequencies and phases and are summed for the output.
+The primary One-cycle editor labels its horizontal axis as elapsed time across the selected oscillator's period [0,1/f0), in milliseconds or seconds. At 440 Hz, one period spans approximately 2.273 ms. Internally the shape remains normalized phase u in [0,1), with t = u/f0; the vertical axis is signed amplitude in [-1,1]. Each oscillator has a repetition frequency f0 and source x(t) = p(frac(f0·t)). Multiple oscillators retain independent frequencies and phases and are summed for the output. An optional phase-normalized shape-comparison view must be explicitly labeled as such; time-domain overlays use a common physical time window.
 
 One sine cycle at f0 = 440 Hz produces a 440 Hz tone. Two equal sine cycles across the canvas produce a dominant tone at 880 Hz, even though the canvas repeats 440 times per second. The UI must distinguish repetition frequency from detected tone frequency.
 
@@ -80,7 +95,7 @@ The app must work from static hosting with client-side processing and without lo
 
 ### F02 — Paint-like waveform editor
 
-Provide a visible zero line, labeled axes, pencil, line, eraser, clear, zoom/pan, grid snapping, and at least 50 reversible edits within a documented memory budget. Mouse and pen must work; basic touch drawing must not scroll the page during a stroke. Pointer Events provide a common input model for mouse, pen, and touch. [API reference](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events).
+Provide a visible zero line, a horizontal time axis in seconds/milliseconds, a vertical signed-amplitude axis, pencil, line, eraser, clear, zoom/pan, grid snapping, and at least 50 reversible edits within a documented memory budget. Keep axis meaning explicit when changing views or zoom; do not use an ambiguous combined Time/Frequency axis label. Mouse and pen must work; basic touch drawing must not scroll the page during a stroke. Pointer Events provide a common input model for mouse, pen, and touch. [API reference](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events).
 
 For each oscillator's waveform lane, the editor creates one amplitude per horizontal position. Only the selected oscillator is edited; other oscillator curves remain visible in their own colors. Envelope lanes use the distinct defaults and eraser rules in F13. A later stroke replaces values only over the horizontal positions it touches. Traversing backward also follows event order: the latest segment wins. Vertical segments resolve to their final value at that position. Untouched regions remain zero; erasing sets the affected region to zero. Brush thickness and pressure are visual aids and do not encode extra amplitude.
 
@@ -88,7 +103,7 @@ Store coordinates independently of screen pixels so resizing, zooming, and displ
 
 ### F03 — Deterministic drawing-to-signal conversion
 
-Map canvas geometry into the declared phase/time and amplitude domain. Resolve stroke order before uniformly resampling; use documented piecewise-linear interpolation by default. Retain the original drawing when resampling or applying optional smoothing.
+Map the visible time coordinates and signed amplitude into the signal domain; for the One-cycle source convert elapsed time to internal phase with u = f0·t. A spectrum's frequency coordinate is not a source-sample time coordinate. Resolve stroke order before uniformly resampling; use documented piecewise-linear interpolation by default. Retain the original drawing when resampling or applying optional smoothing.
 
 Each oscillator's One-cycle sampling defaults to 4,096 samples and supports up to 16,384. Sample phase at n/N for n = 0…N−1, without duplicating the period endpoint. Timeline audio supports 44,100 and 48,000 samples/second for exports, with at most 480,000 output samples. Limit original input to 20,000 points per project and report limits before destructive changes.
 
@@ -142,7 +157,7 @@ Condition discontinuous boundaries consistently with F06. An enabled loop uses a
 
 Show source, selected approximation, and rendered output as distinguishable views with matching units and a clear legend. In Envelope mode, show synchronized pitch/gain lanes and rendered audio, and identify all active carriers. Individual oscillator traces retain their colors; the combined output uses a distinct neutral style. Include spectrum, sample rate, duration or repetition frequency, peak, RMS, DC offset, harmonic count where relevant, and approximation error.
 
-A "What you hear" summary identifies playback source and active processing. Changing pitch can remove previously playable harmonics; explain this without changing the source equation. DC is displayed in the source analysis even when excluded from audio. The spectrum must state its analysis window and scaling.
+A "What you hear" summary identifies playback source and active processing. Changing pitch can remove previously playable harmonics; explain this without changing the source equation. DC is displayed in the source analysis even when excluded from audio. The spectrum has a horizontal Hz axis and vertical component magnitude/level; it must state its analysis window, scaling, and any dB reference. Waveform views retain time horizontally and signed amplitude vertically. On a common fixed time window, higher frequency shows more closely spaced cycles; amplitude scaling expands both positive and negative excursions around zero.
 
 ### F09 — Reproducible exports
 
@@ -164,7 +179,7 @@ Projects retain all three mode workspaces, oscillator IDs/names/colors, original
 
 Ship labeled controls, visible keyboard focus, shortcuts, numeric point editing, text versions of equations/metrics, and status announcements. Color must not be the only way to distinguish curves. Respect reduced motion for decorative animation.
 
-Explain phase versus time, waveform versus envelope drawing, Hz versus linear gain, source versus rendered audio, and low-frequency silence in context. Provide useful recovery for invalid imports, unsupported audio, renderer failures, exhausted limits, and unavailable storage. Test the core create → edit → hear → export path using keyboard and numeric editing.
+Explain time versus frequency views, internal phase versus displayed time, signed amplitude versus volume gain, DC offset versus amplitude scaling, waveform versus envelope drawing, source versus rendered audio, and low-frequency silence in context. Provide useful recovery for invalid imports, unsupported audio, renderer failures, exhausted limits, and unavailable storage. Test the core create → edit → hear → export path using keyboard and numeric editing.
 
 ### F12 — Validation and release readiness
 
