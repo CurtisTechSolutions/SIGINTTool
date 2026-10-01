@@ -11,7 +11,7 @@
 
 SIGINTTool is a browser-based signal sketchpad with the immediacy of Microsoft Paint. A user draws a waveform, sees a mathematical representation of it, and plays the corresponding audio. The first release also lets the user draw pitch and volume envelopes over time and combine multiple oscillators, with a distinct color identifying each oscillator and its curves. Drawing a sine-like wave should produce a sine equation and a recognizable tone. Irregular, jagged, or highly detailed drawings must also produce usable functions and sound.
 
-The product connects three views of the same signal: **drawing → mathematics → audio**. Users can compare them, change parameters, export the result, and save finished sounds to a named soundboard for replay and later editing without writing code or installing a desktop audio application.
+The product connects three views of the same signal: **drawing → mathematics → audio**. Users can compare them, change parameters, export the result, save finished sounds to a named soundboard, and use a locally imported audio file or saved clip to modulate another sound. The workflow supports replay and later editing without writing code or installing a desktop audio application.
 
 An arbitrary drawing does not uniquely identify a simple symbolic equation. The product must distinguish a fitted model from the sampled drawing, report approximation error, and always provide a numerical or piecewise function even when no familiar formula fits.
 
@@ -23,7 +23,7 @@ An arbitrary drawing does not uniquely identify a simple symbolic equation. The 
 | Sound designer or musician | Create unusual single-cycle timbres and short sound effects | Refine a shape and export reproducible audio |
 | Engineer or developer | Sketch a test signal and reuse its mathematical representation | Export samples, coefficients, and executable functions with explicit units |
 
-The initial product is a single-user, desktop-first tool. Waveform, pitch, and volume drawing, plus distinct colors for multiple oscillators, are explicitly required for the first release. Other proposed defaults below are product decisions, not confirmed user research or measured performance.
+The initial product is a single-user, desktop-first tool. Waveform, pitch, and volume drawing, distinct colors for multiple oscillators, a soundboard, and modulation driven by imported audio or another clip are required for the first release. Other proposed defaults below are product decisions, not confirmed user research or measured performance.
 
 ## 3. First-use experience
 
@@ -32,8 +32,9 @@ The initial product is a single-user, desktop-first tool. Waveform, pitch, and v
 3. See the original stroke, the resolved signal, and the function panel update after the edit.
 4. Press Play to enable audio. Adjust pitch in One-cycle mode or duration in Timeline mode; open Envelope mode to draw synchronized pitch and volume curves for the periodic carrier.
 5. Inspect the waveform, spectrum, and approximation error. Explicitly choose Drawing or Approximation for playback.
-6. Save the current sound to the soundboard, name it, and replay it from its button; reopen it for editing when needed.
-7. Export audio, a project, samples, or functions, including a saved sound's portable backup.
+6. Optionally select a carrier, choose an imported audio file or saved clip as its modulator, and compare volume-follow, ring, or pitch modulation with bypass.
+7. Save the current sound to the soundboard, name it, and replay it from its button; reopen it for editing when needed.
+8. Export audio, a project, samples, or functions, including the audio assets required by a saved sound's portable backup.
 
 Default mode is **One-cycle**, with one oscillator at **440 Hz**; users can add up to four oscillators in the proposed initial limit. Audio remains stopped until the user starts it. The example 0.8 sin(2π·440t + π/6) + 0.1 is a source function in seconds; its DC offset and playback processing are separately identified.
 
@@ -82,7 +83,8 @@ Each carrier shape is linked to that oscillator's current One-cycle drawing or s
 | Periodic and finite-duration signals, irregular shapes, synchronized pitch/volume envelopes | Very long recordings, streaming synthesis projects |
 | Sine fitting, periodic Fourier approximations, general piecewise functions | General symbolic regression, automatic identification of every waveform family |
 | Browser playback, spectrum, WAV/CSV/JSON and JavaScript/Python exports | MIDI, plugins, hardware signal generators, RF transmission or capture |
-| Browser-local projects, named soundboard saves/replay, and per-sound audio/project downloads | Accounts, cloud storage, sharing services, audio/image tracing imports |
+| Browser-local projects, named soundboard saves/replay, and per-sound audio/project downloads | Accounts, cloud storage, sharing services, image tracing imports |
+| Local WAV/MP3 imports and saved clips as modulation sources; volume follow, ring, and pitch modulation | Live microphone input, vocoding, convolution, time-preserving pitch shifting, recursive modulation graphs |
 
 "Complex" means arbitrary supported shapes within explicit resolution, duration, and bandwidth limits. It does not mean infinite detail or a guaranteed compact closed-form equation.
 
@@ -144,7 +146,7 @@ Use the browser's actual audio-context sample rate for preview. Web Audio suppor
 
 Playback requires an intentional user action and must handle suspended or unavailable audio gracefully. Browser autoplay restrictions make this a required interaction. [Autoplay reference](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay).
 
-For direct periodic/timeline signals, apply a documented output path: selected source → band limiting → DC removal → peak attenuation if necessary → transport envelope → monitor gain. Envelope compositions use the carrier/modulation ordering in F14. Preserve source values and formulas. Report removed DC, attenuated peaks, and omitted frequency content in the output view. Do not boost quiet signals automatically. Set default monitor gain to 0.1, maximum 1, and bound conditioned peaks to 0.95 before monitor gain. These are digital levels, not a guarantee about a user's listening volume.
+For direct periodic/timeline signals, apply a documented output path: selected source → band limiting → DC removal → peak attenuation if necessary → transport envelope → monitor gain. Envelope compositions use the carrier/modulation ordering in F14; clip-driven effects use F18 and must not have their finite mean subtracted afterward. Preserve source values and formulas. Report removed DC, attenuated peaks, and omitted frequency content in the output view. Do not boost quiet signals automatically. Set default monitor gain to 0.1, maximum 1, and bound conditioned peaks to 0.95 before monitor gain. These are digital levels, not a guarantee about a user's listening volume.
 
 Use 5 ms start/stop ramps, bounded by half the duration for short signals; source changes crossfade over at least 5 ms. Account for envelope and boundary processing in exported rendered audio. Harmonics at or above Nyquist must not be naively folded into the audible band. Show periodic seam discontinuities; optional seam repair is explicit and undoable.
 
@@ -168,23 +170,25 @@ Provide CSV samples with time in seconds and an explicit Source or Rendered outp
 
 Export complete JavaScript and Python source evaluators, including required data and usage examples. For Envelope mode, include pitch/gain evaluators and a phase-integrated composition function; never approximate changing pitch as f(t) multiplied by t. Identify source, sine fit, and Fourier approximation explicitly. Offer a numerical rendered-output evaluator when the user wants the conditioned waveform; do not present the unconditioned source equation as the exact played audio.
 
+Projects with F17 audio assets use a self-contained project bundle; asset-free JSON remains supported. F18 exports retain the carrier/modulator data, timing, mode, depth, and phase/readhead rules. Code exports include complete sample data or companion files and loaders; browser-local asset IDs alone are not portable functions.
+
 Preview and export share the same DSP contract. When sample rates differ, show that fact and recompute the output at the requested rate. Do not promise bit-identical behavior across operating-system audio hardware.
 
 ### F10 — Local project persistence
 
 Autosave the current project locally after edits and restore it after reload with playback stopped. Show save status and a recoverable quota/unavailable-storage error. Support named project JSON download/upload, with schema validation, finite-number/range checks, a 10 MiB file-size limit, and atomic replacement only after validation succeeds.
 
-Projects retain all three mode workspaces, oscillator IDs/names/colors, original drawings, per-oscillator pitch/gain lanes, mute/solo, shared duration, carrier linkage, initial phase, interpolation settings, and selected approximations. A schema round trip reproduces source samples and functions. The current editable project and F16 soundboard entries have separate identities; autosaving the current project must never overwrite a saved sound. Browser-local data can be cleared by the browser; downloadable project files are the portable backup.
+Projects retain all three mode workspaces, oscillator IDs/names/colors, original drawings, per-oscillator pitch/gain lanes, mute/solo, shared duration, carrier linkage, initial phase, interpolation settings, and selected approximations. A schema round trip reproduces source samples and functions. The current editable project and F16 soundboard entries have separate identities; autosaving the current project must never overwrite a saved sound. Browser-local data can be cleared by the browser; downloadable project files are the portable backup. F17 adds immutable audio assets and self-contained bundles; F18 adds modulation routing/settings. Required assets belong to the saved snapshot even if the original imported file or source soundboard pad disappears.
 
 ### F11 — Accessible onboarding and failure states
 
 Ship labeled controls, visible keyboard focus, shortcuts, numeric point editing, text versions of equations/metrics, and status announcements. Color must not be the only way to distinguish curves. Respect reduced motion for decorative animation.
 
-Explain time versus frequency views, internal phase versus displayed time, signed amplitude versus volume gain, DC offset versus amplitude scaling, waveform versus envelope drawing, source versus rendered audio, and low-frequency silence in context. Provide useful recovery for invalid imports, unsupported audio, renderer failures, exhausted limits, and unavailable storage. Test the core create → edit → hear → export path using keyboard and numeric editing.
+Explain time versus frequency views, internal phase versus displayed time, signed amplitude versus volume gain, DC offset versus amplitude scaling, waveform versus envelope drawing, source versus rendered audio, and low-frequency silence in context. Provide useful recovery for invalid imports, unsupported audio, renderer failures, exhausted limits, and unavailable storage. Test the core create → edit → hear → export path using keyboard and numeric editing. Include file selection, numeric trim/offset, carrier/modulator selection, effect controls, bypass, and save/reopen. Explain that volume follow, bipolar ring modulation, and pitch/varispeed are different effects; a modulator is not automatically mixed into the audible output.
 
 ### F12 — Validation and release readiness
 
-Maintain deterministic fixtures for sine (offset/phase/harmonics), triangle, square, sawtooth, silence, DC, irregular multi-harmonic drawings, repeated x positions, discontinuities, and finite pulses/chirps. Include maximum-size projects, corrupt imports, and rapid edit/play/stop sequences. Add constant/ramped pitch, logarithmic frequency sweeps, attack/decay gain, silent gain intervals, and combined envelope fixtures.
+Maintain deterministic fixtures for sine (offset/phase/harmonics), triangle, square, sawtooth, silence, DC, irregular multi-harmonic drawings, repeated x positions, discontinuities, and finite pulses/chirps. Include maximum-size projects, corrupt imports, and rapid edit/play/stop sequences. Add constant/ramped pitch, logarithmic frequency sweeps, attack/decay gain, silent gain intervals, and combined envelope fixtures. F17/F18 additionally require decoder/asset round trips, modulation identities and sidebands, varispeed readhead checks, route timing, asset isolation, and maximum-resource modulation renders.
 
 Test unit-level math, browser integration, export round trips, and manually audible behavior. Use current stable Chrome/Edge, Firefox, and Safari at release; record exact versions, OS, hardware, and sample rates. A headless WebKit pass alone is not a Safari audio sign-off.
 
@@ -218,9 +222,9 @@ The source mix is s_mix(t) = Σ_j s_j(t) over included voices. Preserve per-osci
 
 ### F16 — Save sounds to a soundboard
 
-Provide a **Save to soundboard** action for the current audible output: the included oscillator mix with its pitch/volume envelopes, or the standalone Timeline signal. Let the user name the sound and see its duration before saving. One-cycle sounds use a finite capture duration, default 2 seconds and maximum 10 seconds; finite modes use their selected duration within the existing limits. Saving does not autoplay or replace the working project.
+Provide a **Save to soundboard** action for the current audible output: the included oscillator mix with its pitch/volume envelopes, the standalone Timeline signal, or the F18 modulated result. Let the user name the sound and see its duration before saving. One-cycle sounds use a finite capture duration, default 2 seconds and maximum 10 seconds; finite modes use their selected duration within the existing limits. Saving does not autoplay or replace the working project.
 
-Each entry stores an independent editable project snapshot and a rendered mono clip, plus name, persistent ID, order, timestamps, source mode, duration, sample rate, and schema/algorithm versions. Freeze the source revision/settings when Save is invoked so concurrent edits cannot mix old and new data. Show success only after the clip and snapshot are durably committed together. Repeated activation while a save is pending creates one entry.
+Each entry stores an independent editable project snapshot and a rendered mono clip, plus name, persistent ID, order, timestamps, source mode, duration, sample rate, and schema/algorithm versions. Modulated sounds include their F17/F18 asset dependencies, routing, and settings; the rendered clip captures the resulting effect. Freeze the source revision/settings when Save is invoked so concurrent edits cannot mix old and new data. Show success only after the clip and snapshot are durably committed together. Repeated activation while a save is pending creates one entry.
 
 Show saved sounds as named buttons/pads with duration and ready/loading/playing/error states. Clicking or pressing Enter/Space on a focused ready pad plays it from the beginning. Provide Stop, rename, reorder, remove with an undo opportunity, and Open in editor. The initial playback policy is one active saved clip at a time: a new trigger replaces the old clip with short complementary ramps and stops editor preview. Re-triggering the same pad restarts it. All sounds restore stopped after reload.
 
@@ -228,7 +232,39 @@ Opening a saved sound loads a working copy and preserves the current draft for r
 
 Use the shared renderer at the chosen 44.1/48 kHz save rate. Cache audio after mixing, headroom, and finite clip envelopes but before master monitor gain; apply the current monitor gain exactly once during pad playback. Store the saved monitor setting in the editable snapshot, without baking it into the cache a second time. At matched settings/rates, pad playback must reproduce the saved render within the existing numerical tolerance.
 
-Persist the board locally across reloads, keep unavailable/quota errors recoverable, and never evict saved entries silently to free space. List pad metadata without loading every full audio buffer; prepare clips on demand with a bounded cache. Offer each entry's WAV and editable project downloads through F09/F10 as portable backups. Whole-board cloud sync and importing arbitrary external audio are outside the initial scope.
+Persist the board locally across reloads, keep unavailable/quota errors recoverable, and never evict saved entries silently to free space. List pad metadata without loading every full audio buffer; prepare clips on demand with a bounded cache. Offer each entry's WAV and editable project downloads through F09/F10 as portable backups. Whole-board cloud sync remains deferred. F17 adds local audio imports and frozen saved clips for F18 modulation; removing a source pad must not delete assets still needed by another saved sound or project.
+
+### F17 — Import audio and reuse frozen clips
+
+Let users choose or drop a local audio file, or select a soundboard clip, as a reusable audio source. Required initial file formats are mono/stereo PCM 16-bit WAV and MP3, verified on the supported browser matrix; other formats are optional and must report unsupported/corrupt input clearly. File selection never sends audio to a server and never starts playback.
+
+Show source name, duration, channel choice, trim region, and sample rate. Proposed limits are 20 MiB per input file, 60 seconds of decoded input, and a retained excerpt of 1 ms–10 seconds. Preflight and validate decoded channel/frame counts before accepting an asset; never rely on compressed file size alone. Default stereo conversion is (L+R)/2, with explicit left/right choices when averaging cancels content. Store the selected mono excerpt at 44.1 or 48 kHz, with at most 480,000 samples. Imported audio samples have a separate asset budget and do not count as drawing points.
+
+A soundboard source is a frozen copy/reference to its saved rendered clip **before monitor gain**. It does not trigger the pad, re-evaluate the source recipe recursively, or change when that pad is edited. Retain every referenced immutable asset until all project/snapshot/undo references are released. Deleting the original file or source pad must not break a saved result.
+
+Add a self-contained project bundle (proposed `.sigint.zip`) containing versioned project JSON and all required trimmed PCM assets. Proposed limits are 32 MiB compressed, 64 MiB extracted, 32 archive entries, and eight retained audio assets per project. Enforce entry/count/byte/sample limits while extracting; validate paths, hashes, schemas, and finite samples before atomically replacing state. Keep the existing 10 MiB asset-free JSON import supported. Missing/corrupt assets fail with the current project intact. A bare JSON containing unresolved asset IDs is not a complete portable backup.
+
+Acceptance includes WAV/MP3 fixtures, resampling, stereo cancellation/selection, unsupported and corrupt files, decode cancellation/stale results, quota failures, source deletion/update isolation, and bundle round trips without access to the original file or browser database.
+
+### F18 — Modulate a sound with imported audio or another clip
+
+Provide a clearly labeled **Carrier / sound to change** and **Modulator / sound that controls it**. The carrier can be one selected oscillator, the current finite sound/mix, or a saved/imported clip. The modulator can be an F17 imported excerpt or frozen soundboard clip. A proposed initial limit is one active route and one effect mode per project; repeated stages can be rendered and saved as new clips. Preserve oscillator colors and add separate labeled source/result styles. Route selection does not erase the drawing workspaces.
+
+| Mode | Behavior and controls |
+| --- | --- |
+| Volume follow | Extract a nonnegative amplitude envelope from the modulator and apply it to the carrier; depth 0–100%, proposed attack 5 ms/release 50 ms |
+| Ring modulation | Multiply the carrier by the signed modulator waveform; depth blends dry carrier and multiplied result |
+| Pitch modulation | Modulate an oscillator's frequency by a signed semitone amount and integrate phase; for finite recorded/mixed clips, use explicitly labeled varispeed |
+
+For bounded modulator m(t) in [-1,1], follower e(t) in [0,1], carrier c(t), and depth d in [0,1], volume follow is c(t)·[(1−d)+d·e(t)] and ring modulation is (1−d)·c(t)+d·c(t)·m(t). Proposed pitch depth D is 0–24 semitones: f_eff(t)=f_base(t)·2^(D·m(t)/12). Use the effective frequency in the existing phase integral. A recorded clip instead advances its source readhead at rate 2^(D·m(t)/12); this changes pitch and source timing together and does not preserve word/beat duration.
+
+Expose mode, depth, bypass/A–B, modulator trim/start offset, optional loop, and output duration (1 ms–10 seconds; initially 2 seconds for a periodic carrier). Clip carrier looping is a separate explicit option. Do not automatically stretch the modulator to fill the carrier. Before the source starts or after a non-looping source ends, ramp effect depth to zero so the carrier continues unaffected by further modulation; do not confuse an absent source with silence inside an active clip. Pitch phase/readhead remains continuous when returning to the base rate. A–B comparison restarts both versions from matching initial state.
+
+The modulator is not directly audible unless the user intentionally auditions it. A zero-depth render matches bypass within numerical tolerance. During active full-depth ring modulation, a silent source gives silence; volume-follow silence decays according to its release setting. Pitch silence means the base pitch/rate. If a non-looping carrier reaches its end, output becomes silent; pitch processing never invents missing clip samples.
+
+Show carrier, modulator/envelope, and rendered result with time/amplitude or correctly labeled gain/pitch axes, plus spectrum and the effective pitch/rate range. Preserve the entered pitch settings but display any effective-frequency limiting required by 20–20,000 Hz and actual Nyquist/bandwidth bounds. Use measured resampling/antialias processing for modulation sidebands. Keep intentional gain dynamics, report generated DC/processing, and apply monitor gain once.
+
+A modulated sound can be previewed, exported, saved to the soundboard, reloaded, and reopened with all source assets and effect settings. Mathematical exports include the composition formula and complete numerical data/evaluators; arbitrary recorded audio is not promised a compact symbolic formula. Required evidence includes zero-depth identity, a 440 Hz × 100 Hz full-ring fixture with 340/540 Hz sidebands, constant +12-semitone doubling, phase/readhead continuity, timing/loop/EOF behavior, and repeatable asset-bearing project/function/audio exports.
 
 ## 6. Performance and quality targets
 
@@ -239,7 +275,7 @@ These are acceptance targets to validate, not claims about an existing implement
 | New-user activation | At least 4 of 5 formative-test users draw a wave, hear it, and find its function within 2 minutes without coaching |
 | Drawing feedback | p95 input-to-visible-update ≤ 50 ms in the baseline environment |
 | Periodic conversion and analysis | p95 ≤ 150 ms per edited oscillator after stroke end at 16,384 samples |
-| Maximum finite render, including a four-oscillator envelope mix | p95 ≤ 2 seconds for 10 seconds at 48 kHz; progress and cancellation available |
+| Maximum finite render, including four oscillators and one clip-driven modulation route | p95 ≤ 2 seconds for 10 seconds at 48 kHz; progress and cancellation available |
 | Stop interaction | Control responds ≤ 100 ms; audio stops after the scheduled short ramp, allowing documented device latency |
 | Numerical function export | Source evaluators match canonical source values within 10^-6 absolute error at fixture evaluation points |
 | WAV correctness | Header, duration, channels, sample rate, bounds, and samples agree with the rendered fixture within 1 PCM quantization step |
@@ -248,7 +284,7 @@ These are acceptance targets to validate, not claims about an existing implement
 
 For bandwidth handling, include spectral tests of high-pitch discontinuous waves against an oversampled, low-pass reference. Set a measurable stop-band target in the foundation spike and document it before audio implementation is accepted. Do not use "no aliasing" as an unmeasurable promise.
 
-Collect usability results through a small documented pilot. Remote behavioral analytics and uploading drawings/audio are outside the initial scope.
+Collect usability results through a small documented pilot. Remote behavioral analytics and sending drawings/audio to a server are outside the initial scope. The Upload audio control reads a local file into the browser; F17 imports do not transmit it.
 
 ## 7. Suggested implementation boundaries
 
@@ -260,7 +296,7 @@ Keep raw/source data and audio processing metadata together so every view and ex
 
 ## 8. Repository baseline and delivery
 
-At review, the default branch contains a template README, empty CONTRIBUTING.md, a license, a template changelog, and two GitHub Actions workflows. It has no application source, dependency manifest, tests, or issue backlog.
+Before this planning effort, the default branch contained a template README, empty CONTRIBUTING.md, a license, a template changelog, and two GitHub Actions workflows, with no application source, dependency manifest, tests, or issue backlog.
 
 The existing Docker workflow builds on version tags but the repository has no Dockerfile. The release-please workflow references a configured secret whose availability has not been checked. Foundation work must reconcile these inherited workflows with the chosen static-app build and add pull-request validation before relying on releases. This planning change does not alter those workflows.
 
@@ -268,10 +304,10 @@ Delivery proceeds through four gates; the linked implementation plan maps each r
 
 1. **M0 — Foundation:** contracts, fixtures, baseline hardware, technical spike, and app/CI skeleton.
 2. **M1 — Draw, describe, hear:** editor, conversion, sine fit, complex periodic functions, and periodic audio.
-3. **M2 — Complex workflows and reuse:** timeline audio, pitch/volume lanes and synthesis, distinct oscillator colors and mixing, inspection, exports, local persistence, and a named soundboard.
+3. **M2 — Complex workflows and reuse:** timeline audio, pitch/volume lanes and synthesis, distinct oscillator colors and mixing, inspection, exports, local persistence, a named soundboard, local audio assets, and clip-driven modulation.
 4. **M3 — Release candidate:** onboarding/accessibility and integrated numerical, browser, performance, and usability evidence.
 
-All F01–F16 are required for the first complete release. P0 issues establish the core path; P1 issues complete the release. Priorities are sequencing aids, not permission to omit release requirements.
+All F01–F18 are required for the first complete release. P0 issues establish the core path; P1 issues complete the release. Priorities are sequencing aids, not permission to omit release requirements.
 
 ## 9. Risks and decisions to revisit
 
@@ -283,6 +319,8 @@ All F01–F16 are required for the first complete release. P0 issues establish t
 | Long timelines and overlapping curves hide details | Zoom, numeric editing, distinct oscillator colors/labels, and selected-only views; region sequencing later |
 | Browser/hardware audio differences | Actual-rate reporting, shared DSP, browser matrix, fixture-based comparisons |
 | Initial resolution and recognition thresholds may not fit real use | Pilot with learners and sound designers; record changes to this PRD before expanding scope |
-| Local browser storage is not durable backup | Visible save status and portable project export |
+| Local browser storage is not durable backup | Visible save status and portable project bundles containing required audio |
+| Audio-rate modulation creates sidebands or changes clip timing | Measure an oversampled renderer; label recorded-clip pitch as varispeed; retain explicit timing and source data |
+| Compressed files expand or depend on unavailable codecs | Bounded preflight/decode, format fixtures on the browser matrix, and recoverable errors |
 
 Open product follow-ups are audience emphasis (learning versus sound design), demand for mobile editing, and whether to raise the proposed four-oscillator limit or add region sequencing next. Pitch/volume drawing and distinct oscillator colors are first-release requirements. They do not block the proposed first-release scope.
