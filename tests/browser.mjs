@@ -65,6 +65,21 @@ try {
       const route=await page.evaluate(()=>({target:window.testApp.project.modulation.oscillatorId,selected:window.testApp.project.selectedId}));
       assert.notEqual(route.target,route.selected);
       await page.getByRole('button',{name:'Play sound',exact:true}).click();await page.waitForFunction(()=>!!window.testApp.lastRender);await page.locator('#stop').click();
+      const unchanged=await page.evaluate(()=>JSON.stringify(window.testApp.project));
+      await page.getByLabel('Open project file').setInputFiles({name:'broken.json',mimeType:'application/json',buffer:Buffer.from('{}')});
+      await page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('Project was not opened:'));
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.testApp.project)),unchanged);
+      const recovery=await page.evaluate(async()=>{
+        const app=window.testApp,before=app.library.entries.length,save=app.store.saveSound;
+        app.store.saveSound=async()=>{throw new DOMException('Quota fixture','QuotaExceededError');};
+        try{await app.library.save(null);}finally{app.store.saveSound=save;}
+        const {Importer}=await import('/src/importer.js'),importer=new Importer();
+        const file=new File([await(await fetch('/.fixtures/tone.wav')).arrayBuffer()],'tone.wav');
+        await importer.load(file);const pending=importer.trim({start:0,end:.1});importer.cancel();
+        let aborted=false;try{await pending;}catch(e){aborted=e.name==='AbortError';}
+        return {before,after:app.library.entries.length,status:document.querySelector('#status').textContent,aborted,worker:importer.worker};
+      });
+      assert.equal(recovery.before,recovery.after);assert.match(recovery.status,/not saved/);assert.equal(recovery.aborted,true);assert.equal(recovery.worker,null);
       const frozenId=await page.evaluate(()=>window.testApp.library.entries[0].audioId);
       await page.locator('#mod-source').selectOption(frozenId);
       await page.waitForFunction(id=>window.testApp.project.modulation.sourceId===id,frozenId);
