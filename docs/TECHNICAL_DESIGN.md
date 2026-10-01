@@ -23,6 +23,10 @@ flowchart LR
     D --> E[Models: sine, Fourier, piecewise]
     D --> F[Audio rendering and conditioning]
     E --> F
+    J[Local file or frozen saved clip] --> K[Validated immutable PCM asset]
+    K --> L[Carrier and modulator route]
+    D --> L
+    L --> F
     E --> G[Equation and reconstruction views]
     F --> H[Playback and rendered-output view]
     D --> I[Exports, local projects, and soundboard]
@@ -66,6 +70,8 @@ Suggested modules:
 | export | WAV, CSV, JSON, coefficient and function generation |
 | storage | IndexedDB persistence, schema migrations, atomic imports and saved-sound transactions |
 | soundboard | Named snapshot/clip entries, pad controls, playback coordination, bounded prepared-audio cache |
+| assets | Local decode, trim/channel conversion, immutable PCM identity, portable asset bundles |
+| modulation | Carrier/source routing, envelope follower, ring product, integrated pitch/varispeed |
 | ui | Controls, view selection, accessible status and explanations |
 
 Proposed persisted project fields:
@@ -86,13 +92,20 @@ composition: { durationSeconds, loop, seamPolicy }
 timeline: { strokes, durationSeconds, smoothing, loop, seamPolicy }
 playback: { monitorGain, conditioningSettings }
 exportDefaults: { sampleRate, durationSeconds, format, target }
+audioAssets: [{ id, contentHash, sampleRate, frameCount, provenance }]
+modulation: {
+  enabled, mode, carrierTarget, carrierAssetId?, oscillatorId?,
+  modulatorAssetId, modulatorStartSeconds, modulatorLoop, carrierLoop,
+  depth, pitchDepthSemitones, attackSeconds, releaseSeconds,
+  durationSeconds, seamPolicy, processingVersion
+}
 ~~~
 
 Store all three mode workspaces and restore transport as stopped. Each Envelope carrier links to its oscillator's current One-cycle drawing/model; its pitch curve remains independent of that oscillator's scalar base frequency once edited. Persist editable inputs; derived results can be cached but must be recomputed when algorithm versions change. Runtime typed arrays are not serialized as browser-specific objects in portable JSON.
 
 Use Float64Array for coefficient fitting and error analysis, Float32Array at Web Audio boundaries, and signed 16-bit PCM only at WAV encoding. Source data remains unquantized by PCM export. The proposed initial cap is four oscillator voices; the 20,000-point limit is shared across all workspaces and lanes. Enforce the PRD's 20,000-point project limit, periodic grid cap, and import-size limit before allocation.
 
-A derived result includes project ID, relevant oscillator IDs, source revision, settings hash, algorithm version, mode, units, and any applicable sample rate. A cache key must include all of these; pitch and sample rate affect the audio bandwidth even when the drawing has not changed.
+A derived result includes project ID, relevant oscillator IDs, source revision, settings hash, algorithm version, mode, units, and any applicable sample rate. A cache key must include all of these; pitch and sample rate affect the audio bandwidth even when the drawing has not changed. Include immutable carrier/modulator asset hashes and all modulation settings; a change to an audio source invalidates derived results just as a drawing edit does.
 
 ## 4. The three mathematical outputs
 
@@ -154,7 +167,7 @@ Loop boundaries need an explicit policy. Preserve the source, show the seam, and
 
 ### Shared output contract
 
-For direct periodic/timeline signals, apply band limiting, DC removal, peak attenuation, a transport envelope, and monitor gain in a versioned order. Envelope composition uses the per-carrier DC/modulation ordering below; mixing applies headroom once to the included voices. For direct signals, define DC removal explicitly from their source/rendered mean rather than introducing an undocumented high-pass filter. For envelope voices, subtract carrier DC before modulation, not the finite mixed-output mean afterward.
+For direct periodic/timeline signals, apply band limiting, DC removal, peak attenuation, a transport envelope, and monitor gain in a versioned order. Envelope composition uses the per-carrier DC/modulation ordering below; mixing applies headroom once to the included voices. For direct signals, define DC removal explicitly from their source/rendered mean rather than introducing an undocumented high-pass filter. For envelope voices, subtract carrier DC before modulation, not the finite mixed-output mean afterward. Section 13 defines the additional clip-driven route; generated DC is reported without subtracting a post-effect mean that would refill silent spans.
 
 Choose attenuation g = min(1, 0.95/P), with g = 1 for silence. P must bound the rendered waveform at the chosen rate, not just the input table. The periodic prototype must validate peak estimates on dense/offline renders and include a conservative bound if required to meet the output ceiling. Never silently normalize quiet signals upward.
 
@@ -186,6 +199,8 @@ CSV headers identify time_seconds and amplitude plus source/rendered selection i
 
 Use round-trippable numeric serialization where possible. Export coefficients at full computational precision; UI decimal formatting must not reduce the saved precision. Formula display is for readability; coefficient/data exports are the reproducibility contract.
 
+Asset-free projects retain the existing JSON format. Section 13 defines self-contained bundles for audio-bearing projects and complete companion data for exported code. Browser-local asset references alone cannot reproduce a modulated sound on another device.
+
 Project uploads are data only. Reject unexpected schema versions, invalid ranges, oversized arrays/files, and non-finite values before replacing active state. Do not evaluate uploaded expressions or executable code.
 
 ## 8. Test strategy and delivery decisions
@@ -200,6 +215,8 @@ The foundation spike must answer these implementation questions before audio wor
 2. Which timeline filter meets the spectral target and maximum-render budget?
 3. Which FFT adapter preserves the declared conventions and handles the maximum source grid?
 4. What baseline OS, browser versions, hardware, sample rates, and memory measurements define the performance gates?
+5. Can the finite renderer meet clip-driven ring/pitch sideband quality and readhead continuity at audio rate, including the worst permitted modulation depth?
+6. Which bounded preflight/decoder supports the required WAV/MP3 fixtures without unbounded compressed expansion?
 
 If the prototype requires a different engine, update this document and the affected issues with evidence. Avoid adding a backend merely to move manageable browser work elsewhere.
 
@@ -258,14 +275,14 @@ Test two identical in-phase oscillators, opposite-phase cancellation, different-
 
 ## 11. First-release decisions to confirm through implementation evidence
 
-The product requirements now include waveform/pitch/volume drawing and distinct oscillator colors. The four-voice limit, resource budgets, browser baseline, palette, and exact renderer/filter remain proposed engineering decisions.
+The product requirements include waveform/pitch/volume drawing, distinct oscillator colors, a soundboard, and modulation using imported or saved audio. The four-voice limit, resource budgets, browser baseline, palette, and exact renderer/filter remain proposed engineering decisions.
 
-The foundation spike must cover the full four-voice envelope case before its engine choice is considered settled. If performance requires a lower resolution, a different renderer, or a different limit, document the measurement and update the PRD and issues explicitly instead of silently discarding drawing detail or envelope behavior.
+The foundation spike must cover the full four-voice envelope case and clip-driven modulation before its engine choice is considered settled. If performance requires a lower resolution, a different renderer, or a different limit, document the measurement and update the PRD and issues explicitly instead of silently discarding drawing detail or envelope behavior.
 
 
 ## 12. Named soundboard snapshots and replay
 
-Save the currently included mix or standalone Timeline output as a finite, named sound. Capture the source revision, all oscillator/lane settings, inclusion state, active mode, render rate/duration, and algorithm version before the render begins. A saved entry is independent of the live autosaved project.
+Save the currently included mix, standalone Timeline output, or clip-driven modulation result as a finite, named sound. Capture the source revision, all oscillator/lane settings, inclusion state, active mode, render rate/duration, and algorithm version before the render begins. A saved entry is independent of the live autosaved project.
 
 Suggested entry contract:
 
@@ -273,7 +290,7 @@ Suggested entry contract:
 SoundboardEntry {
   id, name, order, createdAt, updatedAt,
   schemaVersion, algorithmVersion, sourceMode,
-  projectSnapshot, renderSettings,
+  projectSnapshot, renderSettings, referencedSourceAssetIds,
   durationSeconds, sampleRate, channelCount: 1, frameCount,
   audioAssetId, gainStage: "pre-monitor"
 }
@@ -291,8 +308,66 @@ Give async load/prepare requests a trigger generation ID. Only the newest still-
 
 Load the board's metadata list first. Keep a byte-bounded least-recently-used cache of prepared buffers within the existing working-set budget; releasing cached buffers must not delete persisted clips. A missing/corrupt asset shows a recoverable error and can be regenerated from its snapshot after explicit action; never silently replace a saved render using a different DSP version.
 
-Open in editor clones the saved snapshot into a working project and retains the displaced draft for recovery. Keep the saved entry unchanged until an explicit Update saved sound succeeds. Save as new sound assigns a new entry ID. Rename/reorder preserve audio identity; remove offers undo and manages both metadata and its audio asset.
+Open in editor clones the saved snapshot into a working project and retains the displaced draft for recovery. Keep the saved entry unchanged until an explicit Update saved sound succeeds. Save as new sound assigns a new entry ID. Rename/reorder preserve audio identity; remove offers undo. Asset cleanup must respect all remaining project, saved-entry, and undo references, including when another sound uses the removed pad's clip as its modulator.
 
-Per-entry project and WAV downloads provide portable backup through the existing adapters. Test at least 32 maximum-duration saved sounds without eagerly loading all full audio buffers; this is a validation workload, not a promised unlimited-storage guarantee. Browser quota failures remain recoverable and never justify silent deletion of other sounds.
+Per-entry project and WAV downloads provide portable backup through the existing adapters. An audio-bearing snapshot downloads as the complete bundle in section 13. Saving a modulated result includes the route and its immutable source assets; cached output already includes the effect, so pad replay does not apply that effect a second time. Test at least 32 maximum-duration saved sounds without eagerly loading all full audio buffers; this is a validation workload, not a promised unlimited-storage guarantee. Browser quota failures remain recoverable and never justify silent deletion of other sounds.
 
 Validation covers snapshot isolation during concurrent editing, atomic save/update failure, rename/reorder/remove/undo, editor restoration, one-time monitor gain, prepared-pad latency, repeated trigger/Stop races, keyboard activation, and persistence across reload. A sound saved from the four-oscillator envelope mix is part of the integration fixtures.
+
+
+## 13. Imported clips and audio-driven modulation
+
+### Sources, limits, and immutable assets
+
+Read files through local file selection/drop; no runtime backend receives them. Require PCM 16-bit WAV and MP3 fixtures on the release browser matrix. Preflight the container/frames, duration, channel count, and file bounds; reject uncertain or unsupported inputs with a recoverable message. Proposed input limits are 20 MiB, 60 seconds, and one/two channels. Decode one input at a time into a bounded-rate context, then verify actual frame count/duration/channel count. A compressed-byte cap does not bound decoded memory, and a check after decode cannot prevent that allocation.
+
+The browser's decodeAudioData requires a complete file and resamples it to the context's rate; it is not a streaming fragment decoder. The proposed decode context is 48 kHz. Use a bounded decoder if reliable preflight cannot establish safe limits; do not claim that a post-decode check is an allocation guard. Cancellation invalidates import intent; if a native decode cannot abort, serialize it and release its stale result on completion. [Decode API reference](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData).
+
+Let the user choose a 1 ms–10 second excerpt and either mono, stereo average (L+R)/2, left, or right. Show source and resulting formats. Resample to the selected 44.1/48 kHz asset rate with the shared measured converter. Persist only the selected mono Float32 excerpt, at most 480,000 samples, plus provenance (original label, channel selection, trim bounds, rates, conversion version). Treat every sample as finite data. If its peak exceeds 1, attenuate the whole excerpt to 1 and record the factor; never boost quiet sources automatically. Show DC and stereo cancellation rather than silently rectifying, centering, or changing channels.
+
+Use immutable content hashes/IDs over canonical little-endian Float32 bytes and format metadata. Source names are labels. Store a frozen saved-pad clip at its existing pre-monitor level; later pad edits produce different assets. A source pad's monitor setting must never alter modulation depth. Reusing a sound is a reference to rendered PCM, not recursive evaluation of its recipe. Missing assets fail clearly; they are never replaced by a different current pad revision.
+
+Retain source assets across current-project autosave, soundboard snapshots, recoverable drafts, and undo. Short storage transactions commit metadata and all references atomically after decode/render work completes. Reference-aware cleanup may reclaim unreferenced assets; deleting or updating a pad never deletes an asset another saved result needs. Decoded inputs, prepared playback buffers, rendering scratch space, and extraction buffers share the 128 MiB app-owned signal-buffer target. Account separately for browser decoder internals; the application cannot promise an exact browser-process memory ceiling.
+
+### Route and time contract
+
+One route per project is the proposed v1 limit. The carrier target is:
+- one oscillator before the final mix, preserving its drawn pitch/gain and inclusion state;
+- the current finite Timeline/mix, captured at the same revision without this effect; or
+- an imported/frozen saved clip.
+
+The modulator is an immutable asset. A finite current-output capture is a render input, never a dependency on the route's own output. Snapshot output includes all selected oscillator settings; asset carriers preserve their recorded dynamics and any already baked boundary/headroom processing. An asset carrier replaces the audible editor output while selected, without erasing its workspaces. Selecting a muted/excluded oscillator does not make it audible.
+
+Both sources share output time t and a finite duration of 1 ms–10 seconds. The modulator begins at an explicit nonnegative offset; trim is already represented in the retained asset. No implicit time stretching occurs. Source and carrier looping are independent, off by default. At source EOF without looping, effect depth returns to zero; carrier EOF gives zero output unless carrier loop is enabled. A rendered current mix uses finite-clip varispeed semantics for pitch, whereas a selected oscillator uses phase-integrated synthesis.
+
+Define h(t) as the source-availability gate, with complementary 5 ms entry/exit ramps bounded by half the active interval. h=0 outside that interval and h=1 in its interior. Effective amount is d_eff=h·d or D_eff=h·D. This prevents absent modulator audio from muting the tail at full ring/volume depth. Silence *inside* an active clip remains a real modulation value. Loop seam blends are explicit, preserve declared cycle length, and are recorded/shown as processing.
+
+Bypass ramps the amount to zero without resetting accumulated oscillator phase or clip position. Returning pitch to its base rate does not undo earlier phase/time displacement. A–B comparison restarts from identical initial conditions. The modulator reaches the destination only through a separate intentional audition using the shared transport arbiter.
+
+### DSP definitions
+
+Let m(t) be the signed, bounded source sample evaluator, c(t) the carrier without this route, and d in [0,1]. The numerical source evaluator declares piecewise-linear sample reconstruction; the audible renderer uses the measured band-limited reconstruction and identifies differences.
+
+**Volume follow.** Rectify m and use an attack/release follower. On a render grid Fs_render, let a=exp(−1/(tau·Fs_render)); choose attack tau when |m[n]| exceeds e[n−1], otherwise release tau. Then e[n]=a·e[n−1]+(1−a)·|m[n]|. Initialize e=0 at route start and preserve it across chunks and continuous source loops. Proposed defaults are attack 0.005 s and release 0.05 s; numeric controls support 0.001–1 s. y(t)=c(t)·[1−d_eff(t)+d_eff(t)·e(t)]. The result follows amplitude with smoothing; it is not a signed ring product. Silence settles according to release rather than becoming instant zero.
+
+**Ring.** y(t)=(1−d_eff(t))·c(t)+d_eff(t)·c(t)·m(t). At full depth this is bipolar multiplication, including polarity reversals. For sine carriers at 440 Hz and 100 Hz, the interior steady-state product has 340 and 540 Hz components of amplitude 0.5 with opposite cosine signs, and no original 440 Hz component. Analysis excludes transition/window leakage from this analytic check.
+
+**Oscillator pitch.** f_requested(t)=f_base(t)·2^(D_eff(t)·m(t)/12), with proposed D in [0,24] semitones. Clamp the effective repetition frequency to the supported 20–20,000 Hz range further restricted below actual Nyquist/transition limits; report the clamp without rewriting the requested settings. Integrate this effective frequency into theta(t), then apply the existing carrier and drawn gain. This is exponential pitch modulation, not a claim of linear-Hz FM. A constant m=1 and D=12 doubles unclamped frequency. Discrete integration uses documented quadrature/interpolation, carries phase across chunks, and has tested convergence against an independent high-resolution reference.
+
+**Clip pitch / varispeed.** r(t)=2^(D_eff(t)·m(t)/12); source position in seconds is q(t)=q0+integral(r(t) dt). Reconstruct the carrier at q(t) using an antialias resampler suitable for the instantaneous rate. With D up to 24 and |m|<=1, r spans 0.25–4. The output window stays fixed; faster reads may exhaust a non-looping carrier early. Labels state that clip rhythm/word timing changes. Do not promise time-preserving pitch shifting, pitch tracking, vocoding, or convolution.
+
+A zero-amount render is the bypass render from the same initial state. Pitch can still retain phase/time displacement if amount becomes zero midway through playback. Distinguish that stateful behavior from the zero-amount identity fixture.
+
+### Rendering, exports, and checks
+
+Use the finite worker renderer for the first clip-driven path, then play its completed buffer through the shared transport. Display pending/progress/cancel during updates; stale renders cannot start audio. An AudioWorklet is needed only if later measured continuous-interaction requirements justify it. Native AudioBufferSourceNode playbackRate is a k-rate parameter, so it is not assumed to implement sample-by-sample clip pitch modulation; validate a custom renderer for that contract. [Playback-rate reference](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/playbackRate).
+
+For an oscillator target: remove carrier DC, integrate effective pitch, apply drawn gain and the selected amplitude/ring operation, combine included voices, then apply output bandwidth processing and one global headroom factor. For finite current-output targets, capture the unmodulated path before final headroom/transport/monitor; for stored clips, use their PCM as recorded and retain its provenance. Apply route processing followed by output band limiting/headroom, final transport, and monitor once. A previously saved clip already has baked clip boundaries/headroom; do not attempt to undo them or secretly boost it.
+
+Multiplication and time-varying pitch create sidebands; static harmonic truncation alone is insufficient. Prototype oversampled evaluation and low-pass decimation against independent high-resolution references, including near-Nyquist input and maximum depth/rate. Filtering can generate bounded tails around silence; document them. Preserve all-zero input silence and drawn dynamics. Report generated DC without subtracting the finite post-effect mean. Evaluate the maximum four-voice/one-route case against the existing 2-second render and 128 MiB buffer targets before accepting the engine.
+
+Portable `.sigint.zip` bundles contain project.json and a manifest of required little-endian mono .f32 assets (rate, frames, byte length, hash, provenance). Accept at most eight assets, 32 entries, 32 MiB compressed, and 64 MiB extracted, with the existing 10 MiB JSON limit and per-asset sample limits. Validate actual emitted byte counts during bounded extraction, duplicate/path traversal entries, expected filenames, hashes, finite samples, versions, and routing references before a single state commit. Never execute imported code, follow external URLs, or resolve missing IDs from unrelated local state.
+
+Code exports include the composition/effect definition, follower or integrated phase/readhead evaluator, complete sample arrays or companion binary files with loaders, initial state, rate/interpolation, and processing versions. Stateful recurrence has an explicit reset and prefix/integration data for repeatable arbitrary-time evaluation. WAV and numeric rendered exports use the same effect settings. Soundboard Save stores the effect result and complete editable asset-bearing snapshot; replay applies no second effect or monitor multiplier.
+
+Required checks: zero-depth/bypass; analytic ring sidebands; amplitude-follow attack/release; positive/negative/DC/silent modulators; octave pitch and rate constants; phase/readhead continuity across chunks; offset and mismatched lengths; independent loop/EOF behavior; non-silent bypass outside source availability; imported-versus-frozen sources; source-pad update/removal isolation; corrupt/bounded imports; fresh-browser bundle/function reproduction; and matched-settings preview, export, and soundboard replay. Check actual Safari WAV/MP3 decoding and the maximum modulation resource case as part of release evidence.
