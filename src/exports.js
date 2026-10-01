@@ -1,6 +1,13 @@
 import { clone, includedVoices, duration } from './model.js';
 import { waveform } from './render.js';
 import { resolveStrokes, reconstruct } from './signal.js';
+function phaseSegments(points,T,fallback){
+  const knots=(points.length?points:[[0,fallback],[1,fallback]]).map(([u,f])=>[u*T,f]);
+  if(knots[0][0]>0)knots.unshift([0,knots[0][1]]);if(knots.at(-1)[0]<T)knots.push([T,knots.at(-1)[1]]);
+  let prefix=0;const segments=[];
+  for(let i=1;i<knots.length;i++){const [start,f]=knots[i-1],[end,g]=knots[i],dt=end-start,q=Math.log(g/f)/dt;segments.push([start,f,q,prefix]);prefix+=Math.abs(q)<1e-12?f*dt:f*Math.expm1(q*dt)/q;}
+  return segments;
+}
 /** The exported evaluator is also used here, so code/data contracts have one definition. */
 export function evaluateSignal(data,time,kind='source',voiceId=null){
   const T=data.duration;
@@ -13,23 +20,15 @@ export function evaluateSignal(data,time,kind='source',voiceId=null){
   function lane(points,u,fallback=0){
     if(!points.length)return fallback;
     if(u<=points[0][0])return points[0][1];
-    for(let i=1;i<points.length;i++)if(u<=points[i][0]){
-      const [x,a]=points[i-1],[y,b]=points[i],s=(u-x)/(y-x);return a+(b-a)*s;
-    }
-    return points[points.length-1][1];
+    if(u>=points[points.length-1][0])return points[points.length-1][1];
+    let lo=0,hi=points.length-1;while(hi-lo>1){const mid=(lo+hi)>>1;if(points[mid][0]<=u)lo=mid;else hi=mid;}
+    const [x,a]=points[lo],[y,b]=points[hi];return a+(b-a)*(u-x)/(y-x);
   }
-  function integral(points,t,fallback){
-    if(!points.length)return t*fallback;
-    const knots=points.map(([x,v])=>[x*T,v]);
-    if(knots[0][0]>0)knots.unshift([0,knots[0][1]]);
-    if(knots[knots.length-1][0]<T)knots.push([T,knots[knots.length-1][1]]);
-    let cycles=0;
-    for(let i=1;i<knots.length;i++){
-      const [a,f]=knots[i-1],[b,g]=knots[i];if(t<=a)break;
-      const dt=Math.min(t,b)-a,q=Math.log(g/f)/(b-a);
-      cycles+=Math.abs(q)<1e-12?f*dt:f*Math.expm1(q*dt)/q;if(t<=b)break;
-    }
-    return cycles;
+  function integral(segments,t,fallback){
+    if(!segments.length)return t*fallback;
+    let lo=0,hi=segments.length;while(lo+1<hi){const mid=(lo+hi)>>1;if(segments[mid][0]<=t)lo=mid;else hi=mid;}
+    const [start,f,q,prefix]=segments[lo],dt=t-start;
+    return prefix+(Math.abs(q)<1e-12?f*dt:f*Math.expm1(q*dt)/q);
   }
   if(!Number.isFinite(time))return 0;
   if(kind==='rendered')return at(data.rendered.samples,time/data.rendered.duration);
@@ -41,7 +40,7 @@ export function evaluateSignal(data,time,kind='source',voiceId=null){
   for(const v of data.voices){
     if(voiceId?v.id!==voiceId:!v.included)continue;
     if(data.mode==='envelope'&&(time<0||time>=T))continue;
-    const phase=v.phase+(data.mode==='envelope'?integral(v.pitch,time,v.hz):v.hz*time);
+    const phase=v.phase+(data.mode==='envelope'?integral(v.pitchSegments,time,v.hz):v.hz*time);
     const gain=data.mode==='envelope'?lane(v.gain,time/T,1):1;
     value+=gain*at(v.samples,phase,true);
   }
@@ -71,7 +70,7 @@ export function signalData(p,render=null,assets={}){
     project:clone(p),
     voices:p.voices.map(v=>{
       const w=waveform(v),selected=v.source==='drawing'?w.source:reconstruct(w.selected,w.source.length,w.limit);
-      return {id:v.id,name:v.name,color:v.color,included:included.has(v.id),hz:v.hz,phase:v.phase,pitch:v.pitch,gain:v.gain,source:v.source,samples:Array.from(selected),
+      return {id:v.id,name:v.name,color:v.color,included:included.has(v.id),hz:v.hz,phase:v.phase,pitch:v.pitch,pitchSegments:phaseSegments(v.pitch,duration(p),v.hz),gain:v.gain,source:v.source,samples:Array.from(selected),
         coefficients:{a:Array.from(w.data.coefficients.a),b:Array.from(w.data.coefficients.b),sourceSamples:w.source.length,harmonics:v.harmonics},
         fit:w.data.sine,errors:w.data.fourier};
     }),
@@ -98,4 +97,4 @@ export function python(data){
   return '# Complete SIGINT signal data. Python 3 standard library only.\n# Example: signal(0.01, "rendered")\nimport json, math\nDATA = json.loads('+JSON.stringify(json)+')\n'+PYTHON;
 }
 
-const PYTHON="\ndef _at(values, u, periodic=False):\n    if not math.isfinite(u) or not values: return 0.0\n    if periodic: u %= 1\n    elif u < 0 or u >= 1: return 0.0\n    x = u * len(values)\n    i = int(math.floor(x))\n    s = x - i\n    j = (i + 1) % len(values) if periodic else min(i + 1, len(values) - 1)\n    return values[i] * (1 - s) + values[j] * s\n\ndef _lane(points, u, fallback=1):\n    if not points: return fallback\n    if u <= points[0][0]: return points[0][1]\n    for i in range(1, len(points)):\n        if u <= points[i][0]:\n            x, a = points[i-1]\n            y, b = points[i]\n            return a + (b-a) * (u-x) / (y-x)\n    return points[-1][1]\n\ndef _phase(points, t, duration, fallback):\n    if not points: return t * fallback\n    knots = [[x * duration, f] for x, f in points]\n    if knots[0][0] > 0: knots.insert(0, [0, knots[0][1]])\n    if knots[-1][0] < duration: knots.append([duration, knots[-1][1]])\n    result = 0.0\n    for i in range(1, len(knots)):\n        a, f = knots[i-1]\n        b, g = knots[i]\n        if t <= a: break\n        dt = min(t, b) - a\n        q = math.log(g/f) / (b-a)\n        result += f*dt if abs(q) < 1e-12 else f*math.expm1(q*dt)/q\n        if t <= b: break\n    return result\n\ndef signal(t, kind=\"source\", voice_id=None):\n    if not math.isfinite(t): return 0.0\n    if kind in (\"rendered\", \"modulated\"):\n        layer = DATA[kind]\n        return _at(layer[\"samples\"], t/layer[\"duration\"])\n    if kind not in (\"source\", \"oscillator\"): raise ValueError(\"Unknown representation\")\n    duration = DATA[\"duration\"]\n    if kind == \"source\" and (t < 0 or t >= duration): return 0.0\n    if DATA[\"mode\"] == \"timeline\": return _at(DATA[\"timeline\"], t/duration)\n    total = 0.0\n    for v in DATA[\"voices\"]:\n        if voice_id:\n            if v[\"id\"] != voice_id: continue\n        elif not v[\"included\"]: continue\n        if DATA[\"mode\"] == \"envelope\":\n            if t < 0 or t >= duration: continue\n            phase = v[\"phase\"] + _phase(v[\"pitch\"], t, duration, v[\"hz\"])\n            gain = _lane(v[\"gain\"], t/duration)\n        else:\n            phase = v[\"phase\"] + v[\"hz\"]*t\n            gain = 1\n        total += gain * _at(v[\"samples\"], phase, True)\n    return total\n\ndef oscillator(t, voice_id):\n    return signal(t, \"oscillator\", voice_id)\n";
+const PYTHON="\ndef _at(values, u, periodic=False):\n    if not math.isfinite(u) or not values: return 0.0\n    if periodic: u %= 1\n    elif u < 0 or u >= 1: return 0.0\n    x = u * len(values)\n    i = int(math.floor(x))\n    s = x - i\n    j = (i + 1) % len(values) if periodic else min(i + 1, len(values) - 1)\n    return values[i] * (1 - s) + values[j] * s\n\ndef _lane(points, u, fallback=1):\n    if not points: return fallback\n    if u <= points[0][0]: return points[0][1]\n    if u >= points[-1][0]: return points[-1][1]\n    lo, hi = 0, len(points)-1\n    while hi-lo > 1:\n        mid = (lo+hi)//2\n        if points[mid][0] <= u: lo = mid\n        else: hi = mid\n    x, a = points[lo]\n    y, b = points[hi]\n    return a+(b-a)*(u-x)/(y-x)\n\ndef _phase(segments, t, fallback):\n    if not segments: return t*fallback\n    lo, hi = 0, len(segments)\n    while lo+1 < hi:\n        mid = (lo+hi)//2\n        if segments[mid][0] <= t: lo = mid\n        else: hi = mid\n    start, f, q, prefix = segments[lo]\n    dt = t-start\n    return prefix+(f*dt if abs(q) < 1e-12 else f*math.expm1(q*dt)/q)\n\ndef signal(t, kind=\"source\", voice_id=None):\n    if not math.isfinite(t): return 0.0\n    if kind in (\"rendered\", \"modulated\"):\n        layer = DATA[kind]\n        return _at(layer[\"samples\"], t/layer[\"duration\"])\n    if kind not in (\"source\", \"oscillator\"): raise ValueError(\"Unknown representation\")\n    duration = DATA[\"duration\"]\n    if kind == \"source\" and (t < 0 or t >= duration): return 0.0\n    if DATA[\"mode\"] == \"timeline\": return _at(DATA[\"timeline\"], t/duration)\n    total = 0.0\n    for v in DATA[\"voices\"]:\n        if voice_id:\n            if v[\"id\"] != voice_id: continue\n        elif not v[\"included\"]: continue\n        if DATA[\"mode\"] == \"envelope\":\n            if t < 0 or t >= duration: continue\n            phase = v[\"phase\"] + _phase(v[\"pitchSegments\"], t, v[\"hz\"])\n            gain = _lane(v[\"gain\"], t/duration)\n        else:\n            phase = v[\"phase\"] + v[\"hz\"]*t\n            gain = 1\n        total += gain * _at(v[\"samples\"], phase, True)\n    return total\n\ndef oscillator(t, voice_id):\n    return signal(t, \"oscillator\", voice_id)\n";
