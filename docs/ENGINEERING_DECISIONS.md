@@ -82,3 +82,5 @@ Real Safari tests use Apple's bundled safaridriver on a macOS runner. This is se
 from Playwright WebKit. [Apple's setup](https://developer.apple.com/documentation/safari-developer-tools/macos-enabling-webdriver)
 documents enabling WebDriver for this test environment. Human listening, screen-reader
 sessions and the five-person formative study remain explicit release acceptance work.
+
+Native oscillators and AudioParam automation were evaluated as a simpler path, but a shared finite numerical renderer was selected to make arbitrary drawings, clip varispeed, exports and frozen soundboard results reproducible through one implementation. Web Audio schedules the completed buffer; a real-time AudioWorklet and continuously connected modulation graph are unnecessary for this finite first release.
