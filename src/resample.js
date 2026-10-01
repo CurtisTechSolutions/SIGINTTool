@@ -20,6 +20,8 @@ export function readClip(values, seconds, rate, loop=false) {
   const index=Math.floor(position),fraction=(position-index)*PHASES,p=Math.floor(fraction),blend=fraction-p;
   let out=0;const start=index-(HALF-1),left=p*TAPS,right=(p+1)*TAPS,inverse=1-blend;
   if(start>=0&&start+TAPS<=values.length){
+    // Uniform 4× grids land on exact kernel phases; tolerate only floating-point round-off.
+    if(blend<1e-7||blend>1-1e-7){const base=blend<.5?left:right;for(let k=0;k<TAPS;k++)out+=values[start+k]*kernel[base+k];return out;}
     for(let k=0;k<TAPS;k++)out+=values[start+k]*(kernel[left+k]*inverse+kernel[right+k]*blend);
     return out;
   }

@@ -12,11 +12,11 @@ const assets={clip:{sampleRate:48000,samples:Float32Array.from({length:480000},(
 const analysisTimes=[];
 for(let i=0;i<20;i++){const t=performance.now();analyze(resolveStrokes(p.voices[0].waveform.strokes,16384),220,1024);analysisTimes.push(performance.now()-t);}
 report.analysisP95Ms=analysisTimes.sort((a,b)=>a-b)[18];
-for(let i=0;i<3;i++){
+for(let i=0;i<10;i++){
   global.gc?.();const before=process.memoryUsage(),start=performance.now(),result=await render(p,assets),ms=performance.now()-start,after=process.memoryUsage();
   report.runs.push({ms,frames:result.samples.length,peak:result.peak,arrayBuffersMiB:after.arrayBuffers/1024**2,heapMiB:after.heapUsed/1024**2,rssMiB:after.rss/1024**2,arrayBufferIncreaseMiB:(after.arrayBuffers-before.arrayBuffers)/1024**2});
 }
-report.renderWorstMs=Math.max(...report.runs.map(r=>r.ms));report.proposedTargets={analysisP95Ms:150,renderMs:2000,appOwnedBufferMiB:128};
+report.renderWorstMs=Math.max(...report.runs.map(r=>r.ms));report.renderP95Ms=report.runs.map(r=>r.ms).sort((a,b)=>a-b)[Math.ceil(report.runs.length*.95)-1];report.proposedTargets={analysisP95Ms:150,renderMs:2000,appOwnedBufferMiB:128};
 console.log('BENCHMARK:'+JSON.stringify(report));
 if(report.runs.some(r=>r.frames!==480000||r.peak>.950001||r.arrayBuffersMiB>128))throw new Error('Resource or output invariant failed');
 // Performance is reported explicitly; any missed release target must be addressed or documented.

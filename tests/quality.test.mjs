@@ -19,3 +19,11 @@ test('maximum numerical source stays finite and preserves one global attenuation
   const p=project();p.duration=.02;p.voices=Array.from({length:4},(_,i)=>{const v=voice(i);v.waveform.resolution=16384;v.waveform.strokes=preset('square');v.hz=200+i*11;return v;});p.selectedId=p.modulation.oscillatorId=p.voices[0].id;
   const out=await render(p);assert.ok(out.attenuation<1);assert.ok(out.peak<=.950001);assert.ok(out.samples.every(Number.isFinite));
 });
+
+test('geometric pitch stepping tracks an independent logarithmic sweep phase',async()=>{
+  const p=project();p.mode='envelope';p.duration=.15;p.voices[0].source='sine';p.voices[0].pitch=[[0,200],[1,1000]];
+  const r=await render(p),q=Math.log(5)/p.duration;
+  let squared=0,count=0;
+  for(let i=960;i<6000;i++){const t=i/48000,expected=.7*Math.sin(2*Math.PI*200*Math.expm1(q*t)/q);squared+=(r.samples[i]-expected)**2;count++;}
+  assert.ok(Math.sqrt(squared/count)<.001);
+});

@@ -15,7 +15,7 @@ export function waveform(v) {
   for(let h=1;h<=source.length/2;h*=2)tables.push(reconstruct(c,source.length,Math.min(h,limit),true));
   return {source,data,tables,limit,selected:c,dc:c.a[0]};
 }
-function pitchCurve(points,length,fallback) {
+function pitchCurve(points,length,fallback,rate) {
   const nodes=points.length?points:[[0,fallback],[1,fallback]];
   const knots=nodes.map(([x,f])=>[x*length,f]);
   if(knots[0][0]>0)knots.unshift([0,knots[0][1]]);
@@ -25,11 +25,15 @@ function pitchCurve(points,length,fallback) {
     const dt=knots[i+1][0]-knots[i][0],q=Math.log(knots[i+1][1]/knots[i][1])/dt;
     slopes[i]=q;prefix[i+1]=prefix[i]+(Math.abs(q)<1e-12?knots[i][1]*dt:knots[i][1]*Math.expm1(q*dt)/q);
   }
-  let cursor=0;const state={hz:0,phase:0};
+  let cursor=0,count=0;const state={hz:0,phase:0},steps=slopes.map(q=>({ratio:Math.exp(q/rate),cycles:Math.abs(q)<1e-12?1/rate:Math.expm1(q/rate)/q}));
   return t=>{
-    while(cursor<knots.length-2&&knots[cursor+1][0]<=t)cursor++;
-    const tau=t-knots[cursor][0],f=knots[cursor][1],q=slopes[cursor]||0;
-    state.hz=f*Math.exp(q*tau);state.phase=prefix[cursor]+(Math.abs(q)<1e-12?f*tau:f*Math.expm1(q*tau)/q);return state;
+    const old=cursor;while(cursor<knots.length-2&&knots[cursor+1][0]<=t)cursor++;
+    // Exact geometric increments between knots; periodic analytical resets bound round-off.
+    if(old!==cursor||(count++&1023)===0){
+      const tau=t-knots[cursor][0],f=knots[cursor][1],q=slopes[cursor]||0;
+      state.hz=f*Math.exp(q*tau);state.phase=prefix[cursor]+(Math.abs(q)<1e-12?f*tau:f*Math.expm1(q*tau)/q);
+    }else{state.phase+=state.hz*steps[cursor].cycles;state.hz*=steps[cursor].ratio;}
+    return state;
   };
 }
 function sourceState(asset,t,m) {
@@ -52,7 +56,7 @@ export async function render(input,assets={},options={}) {
   const carrier=route&&m.target==='asset'?assetAt(assets,m.carrierId):null;
   const needsCopy=enabled&&m.mode==='pitch'&&m.target==='mix';
   if(n*OVERSAMPLE*8*(needsCopy?2:1)+n*(options.includeSource?12:4)+Object.values(assets).reduce((s,a)=>s+(a.samples?.byteLength||0),0)>96*1024**2)throw new Error('Render exceeds the 128 MiB working-buffer budget');
-  const raw=new Float64Array(n*OVERSAMPLE),voices=p.mode==='timeline'?[]:includedVoices(p).map(v=>({v,...waveform(v),curve:pitchCurve(v.pitch,T,v.hz),phase:v.phase}));
+  const raw=new Float64Array(n*OVERSAMPLE),voices=p.mode==='timeline'?[]:includedVoices(p).map(v=>({v,...waveform(v),curve:pitchCurve(v.pitch,T,v.hz,internal),phase:v.phase}));
   const warnings=new Set(),inactive={value:0,availability:0};
   if(voices.some(item=>Math.abs(item.dc)>1e-6))warnings.add('Oscillator DC removed before drawn gain');
   if(p.mode==='timeline'){
@@ -80,7 +84,7 @@ export async function render(input,assets={},options={}) {
           if(i>0)item.phase+=(item.previousHz+hz)/(2*internal);phase=item.phase;item.previousHz=hz;
         }
         const h=Math.floor((rate/2-1)/hz);
-        const index=h<1?-1:v.source==='sine'?(h<item.data.sine.harmonic?-1:Math.ceil(Math.log2(item.data.sine.harmonic))):Math.min(item.tables.length-1,Math.floor(Math.log2(h)));
+        const index=h<1?-1:v.source==='sine'?(h<item.data.sine.harmonic?-1:Math.ceil(Math.log2(item.data.sine.harmonic))):Math.min(item.tables.length-1,31-Math.clz32(h));
         let value=index<0?0:sample(item.tables[index],phase);
         if(h<item.limit&&!item.warned){warnings.add('Harmonics above the playable bandwidth omitted');item.warned=true;}
         value*=p.mode==='envelope'?envelope(v.gain,t/T,false,1):1;
