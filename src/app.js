@@ -216,4 +216,5 @@ window.addEventListener('beforeunload',()=>{renderer.cancel();transport.stop();}
 refresh();
 
 import { installLibrary } from './library.js';
-app.ready=installLibrary(app);
+import { installAudioLibrary } from './audio-library.js';
+app.ready=installLibrary(app).then(()=>installAudioLibrary(app));

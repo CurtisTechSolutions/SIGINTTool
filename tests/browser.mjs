@@ -43,6 +43,14 @@ try {
       await page.getByRole('button',{name:'Play saved sound CI saved sound',exact:true}).click();
       await page.waitForFunction(()=>window.testApp.transport.context?.state==='running');
       await page.locator('#stop').click();
+      for(const type of ['wav','mp3']){
+        await page.locator('#audio-file').setInputFiles('.fixtures/tone.'+type);
+        await page.locator('#keep-audio').waitFor({state:'visible'});
+        await page.locator('#trim-end').fill('.1');
+        await page.locator('#keep-audio').click();
+        await page.waitForFunction(t=>document.querySelector('#import-state').textContent.startsWith('Kept tone.'+t),type,{timeout:30000});
+      }
+      assert.equal(await page.locator('.asset-row').count(),2);
       assert.deepEqual(errors,[]);
       if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');
