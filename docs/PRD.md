@@ -11,7 +11,7 @@
 
 SIGINTTool is a browser-based signal sketchpad with the immediacy of Microsoft Paint. A user draws a waveform, sees a mathematical representation of it, and plays the corresponding audio. The first release also lets the user draw pitch and volume envelopes over time and combine multiple oscillators, with a distinct color identifying each oscillator and its curves. Drawing a sine-like wave should produce a sine equation and a recognizable tone. Irregular, jagged, or highly detailed drawings must also produce usable functions and sound.
 
-The product connects three views of the same signal: **drawing → mathematics → audio**. Users can compare them, change parameters, and export the result without writing code or installing a desktop audio application.
+The product connects three views of the same signal: **drawing → mathematics → audio**. Users can compare them, change parameters, export the result, and save finished sounds to a named soundboard for replay and later editing without writing code or installing a desktop audio application.
 
 An arbitrary drawing does not uniquely identify a simple symbolic equation. The product must distinguish a fitted model from the sampled drawing, report approximation error, and always provide a numerical or piecewise function even when no familiar formula fits.
 
@@ -32,7 +32,8 @@ The initial product is a single-user, desktop-first tool. Waveform, pitch, and v
 3. See the original stroke, the resolved signal, and the function panel update after the edit.
 4. Press Play to enable audio. Adjust pitch in One-cycle mode or duration in Timeline mode; open Envelope mode to draw synchronized pitch and volume curves for the periodic carrier.
 5. Inspect the waveform, spectrum, and approximation error. Explicitly choose Drawing or Approximation for playback.
-6. Export audio, a project, samples, or functions.
+6. Save the current sound to the soundboard, name it, and replay it from its button; reopen it for editing when needed.
+7. Export audio, a project, samples, or functions, including a saved sound's portable backup.
 
 Default mode is **One-cycle**, with one oscillator at **440 Hz**; users can add up to four oscillators in the proposed initial limit. Audio remains stopped until the user starts it. The example 0.8 sin(2π·440t + π/6) + 0.1 is a source function in seconds; its DC offset and playback processing are separately identified.
 
@@ -81,7 +82,7 @@ Each carrier shape is linked to that oscillator's current One-cycle drawing or s
 | Periodic and finite-duration signals, irregular shapes, synchronized pitch/volume envelopes | Very long recordings, streaming synthesis projects |
 | Sine fitting, periodic Fourier approximations, general piecewise functions | General symbolic regression, automatic identification of every waveform family |
 | Browser playback, spectrum, WAV/CSV/JSON and JavaScript/Python exports | MIDI, plugins, hardware signal generators, RF transmission or capture |
-| Browser-local projects and project-file import/export | Accounts, cloud storage, sharing services, audio/image tracing imports |
+| Browser-local projects, named soundboard saves/replay, and per-sound audio/project downloads | Accounts, cloud storage, sharing services, audio/image tracing imports |
 
 "Complex" means arbitrary supported shapes within explicit resolution, duration, and bandwidth limits. It does not mean infinite detail or a guaranteed compact closed-form equation.
 
@@ -173,7 +174,7 @@ Preview and export share the same DSP contract. When sample rates differ, show t
 
 Autosave the current project locally after edits and restore it after reload with playback stopped. Show save status and a recoverable quota/unavailable-storage error. Support named project JSON download/upload, with schema validation, finite-number/range checks, a 10 MiB file-size limit, and atomic replacement only after validation succeeds.
 
-Projects retain all three mode workspaces, oscillator IDs/names/colors, original drawings, per-oscillator pitch/gain lanes, mute/solo, shared duration, carrier linkage, initial phase, interpolation settings, and selected approximations. A schema round trip reproduces source samples and functions. Browser-local data can be cleared by the browser; downloadable project files are the portable backup.
+Projects retain all three mode workspaces, oscillator IDs/names/colors, original drawings, per-oscillator pitch/gain lanes, mute/solo, shared duration, carrier linkage, initial phase, interpolation settings, and selected approximations. A schema round trip reproduces source samples and functions. The current editable project and F16 soundboard entries have separate identities; autosaving the current project must never overwrite a saved sound. Browser-local data can be cleared by the browser; downloadable project files are the portable backup.
 
 ### F11 — Accessible onboarding and failure states
 
@@ -215,6 +216,20 @@ Only the selected oscillator receives drawing edits. A shared transport starts a
 
 The source mix is s_mix(t) = Σ_j s_j(t) over included voices. Preserve per-oscillator functions and export a complete sum/evaluator for the mix. Apply global headroom control without per-voice/per-frame normalization that would erase relative volumes or envelopes. Display the applied attenuation, and use short ramps for live mute/solo/source changes. A mix of different frequencies must not be labeled a single periodic waveform unless that relationship is actually established.
 
+### F16 — Save sounds to a soundboard
+
+Provide a **Save to soundboard** action for the current audible output: the included oscillator mix with its pitch/volume envelopes, or the standalone Timeline signal. Let the user name the sound and see its duration before saving. One-cycle sounds use a finite capture duration, default 2 seconds and maximum 10 seconds; finite modes use their selected duration within the existing limits. Saving does not autoplay or replace the working project.
+
+Each entry stores an independent editable project snapshot and a rendered mono clip, plus name, persistent ID, order, timestamps, source mode, duration, sample rate, and schema/algorithm versions. Freeze the source revision/settings when Save is invoked so concurrent edits cannot mix old and new data. Show success only after the clip and snapshot are durably committed together. Repeated activation while a save is pending creates one entry.
+
+Show saved sounds as named buttons/pads with duration and ready/loading/playing/error states. Clicking or pressing Enter/Space on a focused ready pad plays it from the beginning. Provide Stop, rename, reorder, remove with an undo opportunity, and Open in editor. The initial playback policy is one active saved clip at a time: a new trigger replaces the old clip with short complementary ramps and stops editor preview. Re-triggering the same pad restarts it. All sounds restore stopped after reload.
+
+Opening a saved sound loads a working copy and preserves the current draft for recovery. Subsequent editor changes do not alter the saved entry. **Update saved sound** explicitly replaces that entry after a successful render and storage transaction; **Save as new sound** creates another entry.
+
+Use the shared renderer at the chosen 44.1/48 kHz save rate. Cache audio after mixing, headroom, and finite clip envelopes but before master monitor gain; apply the current monitor gain exactly once during pad playback. Store the saved monitor setting in the editable snapshot, without baking it into the cache a second time. At matched settings/rates, pad playback must reproduce the saved render within the existing numerical tolerance.
+
+Persist the board locally across reloads, keep unavailable/quota errors recoverable, and never evict saved entries silently to free space. List pad metadata without loading every full audio buffer; prepare clips on demand with a bounded cache. Offer each entry's WAV and editable project downloads through F09/F10 as portable backups. Whole-board cloud sync and importing arbitrary external audio are outside the initial scope.
+
 ## 6. Performance and quality targets
 
 These are acceptance targets to validate, not claims about an existing implementation. Establish a representative desktop baseline in F01.
@@ -228,7 +243,8 @@ These are acceptance targets to validate, not claims about an existing implement
 | Stop interaction | Control responds ≤ 100 ms; audio stops after the scheduled short ramp, allowing documented device latency |
 | Numerical function export | Source evaluators match canonical source values within 10^-6 absolute error at fixture evaluation points |
 | WAV correctness | Header, duration, channels, sample rate, bounds, and samples agree with the rendered fixture within 1 PCM quantization step |
-| Playback stability | No stuck sound or accumulating audio nodes across 100 start/stop/edit cycles |
+| Playback stability | No stuck sound or accumulating audio nodes across 100 start/stop/edit or soundboard trigger/stop cycles |
+| Prepared soundboard pad | p95 user action to source scheduling ≤ 100 ms on the baseline, plus device latency; cold loads show progress |
 
 For bandwidth handling, include spectral tests of high-pitch discontinuous waves against an oversampled, low-pass reference. Set a measurable stop-band target in the foundation spike and document it before audio implementation is accepted. Do not use "no aliasing" as an unmeasurable promise.
 
@@ -252,10 +268,10 @@ Delivery proceeds through four gates; the linked implementation plan maps each r
 
 1. **M0 — Foundation:** contracts, fixtures, baseline hardware, technical spike, and app/CI skeleton.
 2. **M1 — Draw, describe, hear:** editor, conversion, sine fit, complex periodic functions, and periodic audio.
-3. **M2 — Complex workflows and reuse:** timeline audio, pitch/volume lanes and synthesis, distinct oscillator colors and mixing, inspection, exports, and local persistence.
+3. **M2 — Complex workflows and reuse:** timeline audio, pitch/volume lanes and synthesis, distinct oscillator colors and mixing, inspection, exports, local persistence, and a named soundboard.
 4. **M3 — Release candidate:** onboarding/accessibility and integrated numerical, browser, performance, and usability evidence.
 
-All F01–F15 are required for the first complete release. P0 issues establish the core path; P1 issues complete the release. Priorities are sequencing aids, not permission to omit release requirements.
+All F01–F16 are required for the first complete release. P0 issues establish the core path; P1 issues complete the release. Priorities are sequencing aids, not permission to omit release requirements.
 
 ## 9. Risks and decisions to revisit
 
