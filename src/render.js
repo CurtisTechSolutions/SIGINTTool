@@ -112,13 +112,14 @@ export async function render(input,assets={},options={}) {
     }
   }
   if(enabled&&m.mode==='pitch'&&m.target!=='oscillator')warnings.add('Varispeed changes clip pitch and timing together');
+  const sourceSamples=options.includeSource?Float64Array.from({length:n},(_,i)=>raw[i*OVERSAMPLE]):null;
   options.progress?.(.85);
   const audio=downsample(raw,OVERSAMPLE),before=metrics(audio),attenuation=before.peak>.95?.95/before.peak:1,ramp=Math.min(Math.round(.005*rate),Math.floor(audio.length/2));
   for(let i=0;i<audio.length;i++)audio[i]*=attenuation*(ramp?Math.min(1,i/ramp,(audio.length-1-i)/ramp):1);
   if(attenuation<1)warnings.add('One global peak attenuation applied');
   warnings.add('4× render · 257-tap low-pass · 5 ms bounded clip edges');
   options.progress?.(1);
-  return {samples:audio,sampleRate:rate,duration:audio.length/rate,attenuation,...metrics(audio),warnings:[...warnings],gainStage:'pre-monitor'};
+  return {samples:audio,...(sourceSamples?{sourceSamples}:{}),sampleRate:rate,duration:audio.length/rate,attenuation,...metrics(audio),warnings:[...warnings],gainStage:'pre-monitor'};
 }
 export function sourceAt(p,time) {
   const T=duration(p);if(time<0||time>=T)return 0;
