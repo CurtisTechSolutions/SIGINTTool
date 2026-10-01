@@ -28,7 +28,7 @@ export function project() {
     mode: 'waveform', selectedId: first.id, voices: [first],
     duration: 2, timeline: { duration: .1, strokes: [], resolution: 4096 },
     monitor: .1, loop: false, sampleRate: 48000, assets: [],
-    modulation: { enabled: false, mode: 'volume', target: 'mix', carrierId: '', sourceId: '',
+    modulation: { enabled: false, mode: 'volume', target: 'mix', carrierId: '', sourceId: '', oscillatorId: first.id,
       depth: .5, semitones: 12, attack: .005, release: .05, offset: 0,
       sourceLoop: false, carrierLoop: false } };
 }
@@ -94,6 +94,8 @@ export function validateProject(value) {
   if (!['volume','ring','pitch'].includes(m.mode)) throw new Error('Invalid modulation mode');
   if (!['mix','oscillator','asset'].includes(m.target)) throw new Error('Invalid carrier target');
   text(m.sourceId, 128, 'modulator'); text(m.carrierId, 128, 'carrier');
+  if (!ids.has(m.oscillatorId)) throw new Error('Modulation oscillator is missing');
+  if(m.enabled && m.target==='oscillator' && p.mode==='timeline') throw new Error('Choose the current sound as the Timeline modulation target');
   number(m.depth, 0, 1, 'depth'); number(m.semitones, 0, 24, 'pitch depth');
   number(m.attack, .001, 1, 'attack'); number(m.release, .001, 1, 'release'); number(m.offset, 0, 10, 'offset');
   if (m.enabled && (!p.assets.includes(m.sourceId) || (m.target === 'asset' && !p.assets.includes(m.carrierId)))) throw new Error('Required modulation asset is missing');
