@@ -19,6 +19,7 @@ A browser-based signal sketchpad: draw a waveform, see its mathematical function
 - Up to four independently editable oscillators with persistent colors, labels, mute/solo, and mono mixing.
 - Readable sine fits, Fourier approximations with measured error, and general numerical functions for complex shapes.
 - Browser audio, signal/spectrum inspection, WAV and data/function exports, and local project files.
+- A named soundboard for saving sounds, replaying them from buttons, and reopening editable copies.
 
 Simple shapes may have compact formulas. Complex drawings retain complete numerical representations; the product will identify approximation and audio-processing differences explicitly.
 
