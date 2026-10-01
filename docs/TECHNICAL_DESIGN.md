@@ -34,7 +34,13 @@ Keep four things distinct: the original drawing, numerical source data, an appro
 
 ## 2. Coordinates, strokes, and the source of truth
 
-Screen coordinates are presentation only. Normalize horizontal coordinates into u ∈ [0,1] and vertical coordinates into amplitude a ∈ [-1,1]. For a canvas-local point (px,py), the basic mapping is u = px/width and a = 1 − 2py/height; apply the inverse viewport transform first when zoomed or panned. Envelope axes use different mappings: gain = 1 − py/height; a logarithmic pitch view maps f = f_min · (f_max/f_min)^(1 − py/height). Store values in Hz or linear gain after conversion, never generic waveform amplitude.
+The main waveform view uses physical time horizontally and signed amplitude vertically. A separately selected spectrum uses frequency horizontally and component magnitude/level vertically. Gain envelopes use time/gain axes; pitch envelopes use time/Hz axes. Give each view a name, units, and its own axis contract rather than a combined Time/Frequency label.
+
+Screen coordinates are presentation only. After applying the inverse viewport transform, let r = px/width and t = t_start + r·visible_duration_seconds. For the selected one-cycle source, convert elapsed time to phase u = f0·t, with the template interval [0,1/f0); internal phase storage is not the primary user-facing time axis. The basic waveform vertical mapping is a = 1 − 2py/height. Envelope axes use different mappings: gain = 1 − py/height; a logarithmic pitch view maps f = f_min · (f_max/f_min)^(1 − py/height). Store values in the appropriate seconds, Hz, normalized phase, or linear-amplitude/gain units.
+
+At 440 Hz, the single-cycle template spans approximately 2.273 ms. A fixed-time rendered view shows twice as many cycles at 880 Hz. Changing a template's period changes its displayed time extent; do not hide that change through unlabeled normalization. Time-domain overlays align all oscillators to the same physical time window. Phase-normalized shape comparison is a separately labeled optional view.
+
+Amplitude scaling multiplies both positive and negative excursions around zero. A vertical translation adds a DC offset; it is not a volume control. Negative waveform samples are not negative volume. The gain lane is a separate nonnegative multiplier; avoid treating signed sample height as perceived loudness.
 
 Store strokes in pointer-event order with a tool and normalized points. Do not use pointer travel time as signal time: drawing slowly or quickly must produce the same waveform. Pressure and brush thickness do not alter signal values in v1.
 
@@ -171,7 +177,7 @@ Show an immediate pending/progress state for slow jobs. On a renderer failure, k
 
 ## 7. Inspection and portable outputs
 
-For a periodic coefficient view, use the same unwindowed cycle as synthesis. For a finite spectrum display, use a documented window such as Hann and report FFT length, frequency spacing Fs/N, and amplitude scaling. A visualization window must not accidentally multiply the actual audio or source data.
+For a spectrum view, label the horizontal axis in Hz and the vertical axis as component magnitude/level; specify any decibel reference. A spectrum's x coordinate cannot be fed into the waveform's time-coordinate conversion. For a periodic coefficient view, use the same unwindowed cycle as synthesis. For a finite spectrum display, use a documented window such as Hann and report FFT length, frequency spacing Fs/N, and amplitude scaling. A visualization window must not accidentally multiply the actual audio or source data.
 
 Define the WAV format explicitly: RIFF/WAVE, PCM format 1, one channel, signed 16-bit little-endian samples, with duration derived from sample count. Clamp only as a final encoding guard; any clipping indicates a renderer validation failure and must be reported. Specify rounding/saturation and verify positive and negative extremes with decoded fixtures.
 
@@ -243,7 +249,7 @@ The raw mix is s_mix(t) = Σ_j s_j(t) over included voices. Mute always excludes
 
 Apply global headroom attenuation after mixing and before the shared transport ramp/master monitor gain. Keep it fixed over each rendered clip; per-frame or per-voice loudness normalization would change the requested balance or envelopes. Show any applied attenuation. Crossfade/ramp live mute/solo and model changes so state changes do not create avoidable discontinuities.
 
-Expose individual oscillator traces and the final mix in a neutral, heavier line. A phase-domain overlay compares shapes; a time-domain overlay compares actual signals at their own frequencies. Label these views so shape alignment is not mistaken for time alignment.
+Expose colored individual oscillator traces and the final mix in a neutral, heavier line. The primary overlay compares actual signals on a shared time axis, with amplitude vertically. A separately labeled optional phase-domain overlay compares normalized shapes. Higher-frequency cycles become more closely spaced within the same physical time window; a spectrum view instead places their components farther along its frequency axis.
 
 Keep the standalone direct-amplitude Timeline workspace separate from the oscillator bank's output mode. Preserve it while switching modes; do not silently add it as another mixer channel.
 
