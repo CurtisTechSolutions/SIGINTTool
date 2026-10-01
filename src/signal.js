@@ -20,7 +20,7 @@ export function resolveStrokes(strokes, size, smooth = false, periodic = true) {
 }
 export function sample(values, position, periodic = true) {
   if (!values.length || !Number.isFinite(position)) return 0;
-  if (periodic) position = ((position % 1) + 1) % 1;
+  if (periodic) position = position-Math.floor(position);
   else if (position < 0 || position >= 1) return 0;
   const x = position * values.length, i = Math.floor(x), f = x-i;
   return values[i]*(1-f) + values[i+1<values.length ? i+1 : periodic ? 0 : i]*f;

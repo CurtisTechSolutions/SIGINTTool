@@ -15,10 +15,14 @@ for(let p=0;p<=PHASES;p++){
 export function readClip(values, seconds, rate, loop=false) {
   if(!values.length || !Number.isFinite(seconds))return 0;
   let position=seconds*rate;
-  if(loop)position=((position%values.length)+values.length)%values.length;
+  if(loop&&(position<0||position>=values.length))position=((position%values.length)+values.length)%values.length;
   else if(position<0||position>=values.length)return 0;
   const index=Math.floor(position),fraction=(position-index)*PHASES,p=Math.floor(fraction),blend=fraction-p;
-  let out=0;
+  let out=0;const start=index-(HALF-1),left=p*TAPS,right=(p+1)*TAPS,inverse=1-blend;
+  if(start>=0&&start+TAPS<=values.length){
+    for(let k=0;k<TAPS;k++)out+=values[start+k]*(kernel[left+k]*inverse+kernel[right+k]*blend);
+    return out;
+  }
   for(let k=0;k<TAPS;k++){
     let i=index+k-(HALF-1);
     if(loop)i=((i%values.length)+values.length)%values.length;
@@ -39,8 +43,9 @@ export function decimationFilter(factor=4,taps=257) {
 export function downsample(input,factor=4) {
   const h=decimationFilter(factor),half=(h.length-1)/2,out=new Float32Array(Math.round(input.length/factor));
   for(let n=0;n<out.length;n++){
-    const start=n*factor-half;let sum=0;
-    for(let k=Math.max(0,-start);k<h.length&&start+k<input.length;k++)sum+=input[start+k]*h[k];
+    const center=n*factor,start=center-half;let sum=0;
+    if(start>=0&&center+half<input.length){sum=input[center]*h[half];for(let j=1;j<=half;j++)sum+=(input[center-j]+input[center+j])*h[half+j];}
+    else {const end=Math.min(h.length,input.length-start);for(let k=Math.max(0,-start);k<end;k++)sum+=input[start+k]*h[k];}
     out[n]=sum;
   }
   return out;

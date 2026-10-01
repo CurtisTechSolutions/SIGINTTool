@@ -25,11 +25,11 @@ function pitchCurve(points,length,fallback) {
     const dt=knots[i+1][0]-knots[i][0],q=Math.log(knots[i+1][1]/knots[i][1])/dt;
     slopes[i]=q;prefix[i+1]=prefix[i]+(Math.abs(q)<1e-12?knots[i][1]*dt:knots[i][1]*Math.expm1(q*dt)/q);
   }
-  let cursor=0;
+  let cursor=0;const state={hz:0,phase:0};
   return t=>{
     while(cursor<knots.length-2&&knots[cursor+1][0]<=t)cursor++;
     const tau=t-knots[cursor][0],f=knots[cursor][1],q=slopes[cursor]||0;
-    return {hz:f*Math.exp(q*tau),phase:prefix[cursor]+(Math.abs(q)<1e-12?f*tau:f*Math.expm1(q*tau)/q)};
+    state.hz=f*Math.exp(q*tau);state.phase=prefix[cursor]+(Math.abs(q)<1e-12?f*tau:f*Math.expm1(q*tau)/q);return state;
   };
 }
 function sourceState(asset,t,m) {
@@ -53,7 +53,8 @@ export async function render(input,assets={},options={}) {
   const needsCopy=enabled&&m.mode==='pitch'&&m.target==='mix';
   if(n*OVERSAMPLE*8*(needsCopy?2:1)+n*(options.includeSource?12:4)+Object.values(assets).reduce((s,a)=>s+(a.samples?.byteLength||0),0)>96*1024**2)throw new Error('Render exceeds the 128 MiB working-buffer budget');
   const raw=new Float64Array(n*OVERSAMPLE),voices=p.mode==='timeline'?[]:includedVoices(p).map(v=>({v,...waveform(v),curve:pitchCurve(v.pitch,T,v.hz),phase:v.phase}));
-  const warnings=new Set();
+  const warnings=new Set(),inactive={value:0,availability:0};
+  if(voices.some(item=>Math.abs(item.dc)>1e-6))warnings.add('Oscillator DC removed before drawn gain');
   if(p.mode==='timeline'){
     raw.set(resolveStrokes(p.timeline.strokes,raw.length,false,false));
     const dc=metrics(raw).dc;for(let i=0;i<raw.length;i++)raw[i]-=dc;
@@ -64,9 +65,9 @@ export async function render(input,assets={},options={}) {
   for(let block=0;block<raw.length;block+=16384){
     if(options.signal?.aborted)throw new DOMException('Canceled','AbortError');
     for(let i=block;i<Math.min(raw.length,block+16384);i++){
-      const t=i/internal,state=enabled&&m.target==='oscillator'?sourceState(source,t,m):{value:0,availability:0};
+      const t=i/internal,state=enabled&&m.target==='oscillator'?sourceState(source,t,m):inactive;
       const amount=m.depth*state.availability,depth=m.semitones*state.availability;
-      const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;
+      if(enabled&&m.target==='oscillator'&&m.mode==='volume'){const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;}
       let sum=raw[i];
       for(const item of voices){
         const v=item.v,base=p.mode==='envelope'?item.curve(t):{hz:v.hz,phase:v.hz*t};
@@ -81,8 +82,7 @@ export async function render(input,assets={},options={}) {
         const h=Math.floor((rate/2-1)/hz);
         const index=h<1?-1:v.source==='sine'?(h<item.data.sine.harmonic?-1:Math.ceil(Math.log2(item.data.sine.harmonic))):Math.min(item.tables.length-1,Math.floor(Math.log2(h)));
         let value=index<0?0:sample(item.tables[index],phase);
-        if(h<item.limit)warnings.add('Harmonics above the playable bandwidth omitted');
-        if(Math.abs(item.dc)>1e-6)warnings.add('Oscillator DC removed before drawn gain');
+        if(h<item.limit&&!item.warned){warnings.add('Harmonics above the playable bandwidth omitted');item.warned=true;}
         value*=p.mode==='envelope'?envelope(v.gain,t/T,false,1):1;
         if(target&&m.mode==='ring')value*=1-amount+amount*state.value;
         if(target&&m.mode==='volume')value*=1-amount+amount*follower;
@@ -100,7 +100,7 @@ export async function render(input,assets={},options={}) {
       if(options.signal?.aborted)throw new DOMException('Canceled','AbortError');
       for(let i=block;i<Math.min(raw.length,block+16384);i++){
         const t=i/internal,state=sourceState(source,t,m),amount=m.depth*state.availability;
-        const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;
+        if(m.mode==='volume'){const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;}
         const ratio=m.mode==='pitch'?2**(m.semitones*state.availability*state.value/12):1;
         if(i>0)position+=(previousRatio+ratio)/(2*internal);previousRatio=ratio;
         let value=carrier?readClip(carrier.samples,position,carrier.sampleRate,m.carrierLoop):needsCopy?readClip(dry,position,internal,m.carrierLoop):dry[i];
