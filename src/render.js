@@ -95,7 +95,8 @@ export async function render(input,assets={},options={}) {
       raw[i]=sum;
     }
     options.progress?.(.5*Math.min(1,(block+16384)/raw.length));
-    await new Promise(r=>setTimeout(r,0));
+    // Worker termination is immediate; only direct callers with an AbortSignal need event-loop yields.
+    if(options.signal)await new Promise(r=>setTimeout(r,0));
   }
   if(route&&m.target!=='oscillator'){
     const dry=needsCopy?raw.slice():raw;
@@ -113,7 +114,8 @@ export async function render(input,assets={},options={}) {
         raw[i]=value;
       }
       options.progress?.(.5+.3*Math.min(1,(block+16384)/raw.length));
-      await new Promise(r=>setTimeout(r,0));
+      // Worker termination is immediate; only direct callers with an AbortSignal need event-loop yields.
+    if(options.signal)await new Promise(r=>setTimeout(r,0));
     }
   }
   if(enabled&&m.mode==='pitch'&&m.target!=='oscillator')warnings.add('Varispeed changes clip pitch and timing together');
