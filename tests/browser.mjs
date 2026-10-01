@@ -1,6 +1,7 @@
 import { chromium, firefox, webkit } from 'playwright';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 const server = spawn(process.execPath, ['scripts/serve.mjs'], { stdio: 'inherit' });
 try {
   for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:4173')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
@@ -64,6 +65,32 @@ try {
       const route=await page.evaluate(()=>({target:window.testApp.project.modulation.oscillatorId,selected:window.testApp.project.selectedId}));
       assert.notEqual(route.target,route.selected);
       await page.getByRole('button',{name:'Play sound',exact:true}).click();await page.waitForFunction(()=>!!window.testApp.lastRender);await page.locator('#stop').click();
+      const frozenId=await page.evaluate(()=>window.testApp.library.entries[0].audioId);
+      await page.locator('#mod-source').selectOption(frozenId);
+      await page.waitForFunction(id=>window.testApp.project.modulation.sourceId===id,frozenId);
+      await page.getByRole('button',{name:'Remove CI saved sound',exact:true}).click();
+      await page.waitForFunction(()=>window.testApp.library.entries.length===0);
+      assert.ok(await page.evaluate(id=>window.testApp.project.assets.includes(id),frozenId));
+      await page.locator('#save-sound').click();await page.waitForFunction(()=>window.testApp.library.entries.length===1);
+      await page.locator('#export-rate').selectOption('44100');
+      const beforeExport=await page.evaluate(()=>JSON.stringify(window.testApp.project));
+      const [audioDownload]=await Promise.all([page.waitForEvent('download'),page.locator('#export-download').click()]);
+      const audioBytes=await readFile(await audioDownload.path());
+      assert.equal(audioBytes.toString('ascii',0,4),'RIFF');assert.equal(audioBytes.readUInt32LE(24),44100);assert.equal(audioBytes.readUInt32LE(40),Math.round(.08*44100)*2);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.testApp.project)),beforeExport);
+      await page.locator('#export-format').selectOption('javascript');
+      const [functionDownload]=await Promise.all([page.waitForEvent('download'),page.locator('#export-download').click()]);
+      const functionText=await readFile(await functionDownload.path(),'utf8');assert.match(functionText,/export const signal=/);assert.match(functionText,/"modulated":/);
+      const [bundleDownload]=await Promise.all([page.waitForEvent('download'),page.locator('#download-project').click()]);
+      const portable=await browser.newContext({viewport:{width:1440,height:1000}}),fresh=await portable.newPage();
+      await fresh.goto('http://127.0.0.1:4173');
+      await fresh.evaluate(async()=>{window.testApp=(await import('/src/app.js')).app;await window.testApp.ready;});
+      await fresh.getByLabel('Open project file').setInputFiles(await bundleDownload.path());
+      await fresh.waitForFunction(()=>window.testApp.project.modulation.enabled&&window.testApp.project.assets.length===3);
+      assert.equal(await fresh.evaluate(()=>window.testApp.transport.context),null);
+      await fresh.getByRole('button',{name:'Play sound',exact:true}).click();
+      await fresh.waitForFunction(()=>!!window.testApp.lastRender);assert.ok(await fresh.evaluate(()=>window.testApp.lastRender.peak>0));
+      await portable.close();
       assert.deepEqual(errors,[]);
       if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');
