@@ -7,3 +7,5 @@ Before proposing a change, run `npm run check`, `npm test`, and `npm run build`.
 Keep signal math independent of the DOM. Include an independent analytic or behavioral regression test for numerical changes. Never execute imported project code or send user audio to a server. Use small focused branches and PRs. Feature issues close only when their acceptance evidence exists.
 
 See [the PRD](docs/PRD.md), [technical design](docs/TECHNICAL_DESIGN.md), and [implementation decisions](docs/ENGINEERING_DECISIONS.md).
+
+For real codec fixtures, install ffmpeg and run `node scripts/fixtures.mjs` before `npm test` or browser tests. CI requires these generated WAV/MP3 fixtures.

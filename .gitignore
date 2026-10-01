@@ -3,3 +3,5 @@ dist/
 artifacts/
 playwright-report/
 .DS_Store
+
+.fixtures/

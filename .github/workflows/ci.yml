@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: sudo apt-get install -y ffmpeg
+      - run: node scripts/fixtures.mjs
       - run: npm test
       - run: npm run build
       - uses: actions/upload-artifact@v4
@@ -42,4 +44,6 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=sigint_test_sink
           pactl set-default-sink sigint_test_sink
+      - run: sudo apt-get install -y ffmpeg
+      - run: node scripts/fixtures.mjs
       - run: npm run test:browser

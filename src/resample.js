@@ -48,8 +48,8 @@ export function downsample(input,factor=4) {
 export function resamplePCM(input, sourceRate, targetRate) {
   if(sourceRate===targetRate)return Float32Array.from(input);
   // Resample through an oversampled grid; a final filter bounds the target bandwidth.
-  const ratio=Math.max(1,sourceRate/targetRate),factor=4;
-  if(ratio>4)throw new Error('Audio sample-rate ratio exceeds supported converter range');
+  const ratio=Math.max(1,sourceRate/targetRate),factor=ratio>4?8:4;
+  if(ratio>8)throw new Error('Audio sample-rate ratio exceeds supported converter range');
   const intermediate=new Float64Array(Math.round(input.length/sourceRate*targetRate)*factor);
   for(let i=0;i<intermediate.length;i++)intermediate[i]=readClip(input,i/(targetRate*factor),sourceRate);
   return downsample(intermediate,factor);
