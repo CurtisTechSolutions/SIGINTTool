@@ -115,10 +115,10 @@ try {
         });
         assert.equal(stress.count,32);assert.equal(stress.listingReads,0);assert.equal(stress.nodes,0);assert.equal(stress.afterCancel,0);console.log('BROWSER_STRESS:'+JSON.stringify(stress));
         await page.setViewportSize({width:390,height:844});
-        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+        const overflow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,items:[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().right>innerWidth+1).map(n=>n.tagName+'.'+n.className).slice(0,12)}));assert.ok(overflow.scroll<=overflow.width+1,JSON.stringify(overflow));
       }
       assert.deepEqual(errors,[]);
-      if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
+      if(name==='chromium'){await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>scrollTo(0,0));console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:60})).toString('base64')));}
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');
     }catch(error){if(page){console.log('APP_STATE:'+await page.evaluate(()=>JSON.stringify({status:document.querySelector('#status')?.textContent,transport:document.querySelector('#transport-state')?.textContent,hasRender:!!window.testApp?.lastRender,audioState:window.testApp?.transport.context?.state,sampleRate:window.testApp?.transport.context?.sampleRate})));console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:50,fullPage:true})).toString('base64')));}throw error;}finally{await browser.close();}
   }
