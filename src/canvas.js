@@ -50,7 +50,7 @@ export class DrawingCanvas {
     for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(0,h*i/4);ctx.lineTo(w,h*i/4);ctx.stroke();}
     if(s.lane==='waveform'||s.lane==='timeline'){ctx.strokeStyle='#586882';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();}
     for(const curve of s.curves){
-      ctx.beginPath();ctx.strokeStyle=COLORS[curve.color]||'#b4c8df';ctx.lineWidth=curve.selected?2.5:1.5;ctx.globalAlpha=curve.selected?1:.55;ctx.setLineDash(curve.selected?[]:[5+curve.color*2,4]);
+      ctx.beginPath();ctx.strokeStyle=curve.strokeColor||COLORS[curve.color]||'#b4c8df';ctx.lineWidth=curve.selected?2.5:1.5;ctx.globalAlpha=curve.selected?1:.55;ctx.setLineDash(curve.pattern||(curve.selected?[]:[5+curve.color*2,4]));
       for(let x=0;x<=w;x++){const u=s.pan+x/w/s.zoom,v=curve.value(u),y=mapY(v);if(!x)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
       ctx.stroke();
     }

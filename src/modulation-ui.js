@@ -1,10 +1,22 @@
 import { COLORS } from './model.js';
+import { drawSignal } from './canvas.js';
 export function installModulation(app){
   const el=app.element,panel=app.addPanel('Shape one sound with another');
   const heading=el('p',{class:'hint'},'Choose a frozen audio clip as the modulator. It can follow volume, multiply the waveform, or bend pitch. Saved sounds are copied by content, so later edits to a pad do not change this sound.');
   const grid=el('div',{class:'control-grid',id:'modulation-controls'}),formula=el('code',{class:'route-formula',id:'modulation-formula'});
-  panel.append(heading,grid,formula);
-  let refreshToken=0;
+  const preview=el('canvas',{class:'preview','aria-label':'Modulator clip waveform'}),summary=el('p',{class:'hint',id:'mod-source-summary'}),audition=el('button',{id:'audition-source'},'Audition modulator');
+  panel.append(heading,grid,formula,preview,summary,audition);
+  let refreshToken=0,auditioning=false;
+  audition.onclick=async()=>{
+    app.stop();const token=app.playbackRevision,sourceId=app.project.modulation.sourceId;
+    try{
+      await app.transport.enable();const a=app.assets[sourceId]||await app.store.get('audio',sourceId);
+      if(token!==app.playbackRevision)return;if(!a)throw new Error('Choose a modulator clip first');
+      const samples=Float32Array.from(a.samples),edge=Math.min(Math.round(.005*a.sampleRate),Math.floor(samples.length/2));
+      for(let i=0;i<samples.length;i++)samples[i]*=.95*(edge?Math.min(1,i/edge,(samples.length-1-i)/edge):1);
+      app.transport.setVolume(app.project.monitor);app.transport.play({samples,sampleRate:a.sampleRate,duration:samples.length/a.sampleRate},{tag:'modulator · '+a.name});auditioning=true;app.status('Auditioning modulator '+a.name);
+    }catch(e){app.status(e.message,true);}
+  };
   function field(label,node){return el('label',{},label,node);}
   function select(id,values,value,change){
     const node=el('select',{id,'data-mod-key':id,onchange:e=>change(e.target.value)},...values.map(([value,text])=>el('option',{value},text)));node.value=value;return node;
@@ -52,9 +64,16 @@ export function installModulation(app){
       :m.target==='oscillator'?'f(t) = basePitch(t) × 2^(D(t) × modulator(t) / 12); phase = integral of frequency'
       :'readhead(t) = integral of 2^(D(t) × modulator(t) / 12); y(t) = carrier(readhead(t)). Pitch and timing change together.';
     if(!m.sourceLoop)formula.textContent+=' Outside the modulator clip: unchanged carrier.';
+    audition.disabled=!m.sourceId;
+    if(m.sourceId){
+      const a=app.assets[m.sourceId]||await app.store.get('audio',m.sourceId);if(token!==refreshToken)return;
+      if(a){let low=0,high=0,sum=0;for(const x of a.samples){low=Math.min(low,x);high=Math.max(high,x);sum+=x*x;}
+        drawSignal(preview,a.samples,{color:'#e8edf5'});summary.textContent=a.name+' · '+(a.samples.length/a.sampleRate).toFixed(3)+' s · min '+low.toFixed(3)+' · max '+high.toFixed(3)+' · RMS '+Math.sqrt(sum/a.samples.length).toFixed(3)+(m.mode==='pitch'?' · rate range '+(2**(m.semitones*low/12)).toFixed(2)+'–'+(2**(m.semitones*high/12)).toFixed(2)+'× before oscillator limits':'');
+      }
+    }else{drawSignal(preview,new Float32Array(1));summary.textContent='Choose an imported or saved clip. Preview above shows signed sample amplitude.';}
     if(focus)grid.querySelector('[data-mod-key="'+CSS.escape(focus)+'"]')?.focus();
   }
-  app.onChange(()=>refresh().catch(e=>app.status(e.message,true)));app.onAssetsChanged=()=>refresh().catch(e=>app.status(e.message,true));
+  app.onChange(()=>{if(auditioning){auditioning=false;app.stop();}refresh().catch(e=>app.status(e.message,true));});app.onAssetsChanged=()=>refresh().catch(e=>app.status(e.message,true));
   const oldRefresh=app.library.refresh;app.library.refresh=async()=>{await oldRefresh();await refresh();};
   // Soundboard operations publish a local event after their atomic transaction.
   window.addEventListener('sigint-library-change',()=>refresh().catch(e=>app.status(e.message,true)));

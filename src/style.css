@@ -8,3 +8,7 @@
 .trim-editor{margin:1rem 0;max-width:900px}.trim-editor canvas{width:100%;height:120px}.asset-list{display:grid;gap:.5rem;margin-top:1rem}.asset-row{display:flex;gap:1rem;align-items:center;padding:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:8px}.asset-row strong{flex:1;overflow-wrap:anywhere}.asset-row button{margin-left:auto}
 
 .route-formula{display:block;white-space:normal;line-height:1.8;margin-top:1.25rem;color:#c9b5ff}.asset-row{flex-wrap:wrap}.asset-row .hint{white-space:nowrap}
+
+:root{--surface:#101925;--border:#2c384c}.mix-legend{color:#dce4f2}a:focus-visible,summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:3px solid #8ee9ff;outline-offset:3px}
+
+.control-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.control-grid>label,.voice{min-width:0}.route-formula{overflow-wrap:anywhere}@media(max-width:700px){.control-grid,.voices-panel #voices{grid-template-columns:repeat(2,minmax(0,1fr))}.control-grid{padding:12px 0}.asset-row .hint{white-space:normal}.extra-panel h2{overflow-wrap:anywhere}}
