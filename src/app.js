@@ -32,6 +32,7 @@ export const app={
   async play(options={}){
     const token=++intent;
     try{
+      app.status('Starting browser audio…');
       const rate=await transport.enable();if(token!==intent)return;
       const snapshot=clone(app.project);
       app.status('Rendering sound…');$('#render-progress').hidden=false;

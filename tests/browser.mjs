@@ -32,6 +32,6 @@ try {
       assert.deepEqual(errors,[]);
       if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');
-    }catch(error){if(page){console.log('APP_STATE:'+await page.evaluate(()=>JSON.stringify({status:document.querySelector('#status')?.textContent,transport:document.querySelector('#transport-state')?.textContent,hasRender:!!window.testApp?.lastRender})));console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:50,fullPage:true})).toString('base64')));}throw error;}finally{await browser.close();}
+    }catch(error){if(page){console.log('APP_STATE:'+await page.evaluate(()=>JSON.stringify({status:document.querySelector('#status')?.textContent,transport:document.querySelector('#transport-state')?.textContent,hasRender:!!window.testApp?.lastRender,audioState:window.testApp?.transport.context?.state,sampleRate:window.testApp?.transport.context?.sampleRate})));console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:50,fullPage:true})).toString('base64')));}throw error;}finally{await browser.close();}
   }
 }finally{server.kill();}
