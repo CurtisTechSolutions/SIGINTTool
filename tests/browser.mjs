@@ -51,6 +51,19 @@ try {
         await page.waitForFunction(t=>document.querySelector('#import-state').textContent.startsWith('Kept tone.'+t),type,{timeout:30000});
       }
       assert.equal(await page.locator('.asset-row').count(),2);
+      await page.locator('#mod-mode').selectOption('ring');
+      await page.locator('#mod-depth').fill('1');await page.locator('#mod-depth').press('Tab');
+      await page.locator('#mod-enabled').check();
+      await page.getByRole('button',{name:'Play sound',exact:true}).click();
+      await page.waitForFunction(()=>!!window.testApp.lastRender);
+      assert.ok(await page.evaluate(()=>window.testApp.lastRender.peak>0));
+      await page.locator('#stop').click();
+      await page.locator('#mod-mode').selectOption('pitch');
+      await page.locator('#mod-target').selectOption('oscillator');
+      await page.locator('#mod-oscillator').selectOption(await page.evaluate(()=>window.testApp.project.voices[0].id));
+      const route=await page.evaluate(()=>({target:window.testApp.project.modulation.oscillatorId,selected:window.testApp.project.selectedId}));
+      assert.notEqual(route.target,route.selected);
+      await page.getByRole('button',{name:'Play sound',exact:true}).click();await page.waitForFunction(()=>!!window.testApp.lastRender);await page.locator('#stop').click();
       assert.deepEqual(errors,[]);
       if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');

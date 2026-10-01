@@ -48,3 +48,34 @@ test('sample-rate conversion preserves duration and bounded low-frequency tone',
   const out=resamplePCM(v,44100,48000);assert.equal(out.length,4800);
   assert.ok(Math.max(...out)<.51);
 });
+
+function toneAmplitude(samples,rate,hz,from=.025,to=.085){
+  let re=0,im=0,count=0;
+  for(let i=Math.round(from*rate);i<Math.min(samples.length,Math.round(to*rate));i++){re+=samples[i]*Math.cos(2*Math.PI*hz*i/rate);im+=samples[i]*Math.sin(2*Math.PI*hz*i/rate);count++;}
+  return 2*Math.hypot(re,im)/count;
+}
+test('constant bipolar pitch modulators produce octave ratios with continuous integrated phase',async()=>{
+  for(const sign of [-1,1]){
+    const p=project();p.duration=.12;p.voices[0].hz=1000;p.assets=['dc'];
+    p.modulation={...p.modulation,enabled:true,mode:'pitch',target:'oscillator',sourceId:'dc',semitones:12};
+    const result=await render(p,{dc:{sampleRate:48000,samples:new Float32Array(9600).fill(sign)}});
+    assert.ok(toneAmplitude(result.samples,48000,sign===1?2000:500)>.65);
+  }
+});
+test('clip pitch uses a varispeed readhead and explicit carrier loop behavior',async()=>{
+  const p=project();p.duration=.12;p.assets=['tone','dc'];
+  p.modulation={...p.modulation,enabled:true,mode:'pitch',target:'asset',sourceId:'dc',carrierId:'tone',semitones:12};
+  const assets={tone:{sampleRate:48000,samples:Float32Array.from({length:4800},(_,i)=>.5*Math.sin(2*Math.PI*1000*i/48000))},dc:{sampleRate:48000,samples:new Float32Array(9600).fill(1)}};
+  let result=await render(p,assets);
+  assert.ok(toneAmplitude(result.samples,48000,2000,.02,.04)>.47);
+  assert.ok(result.samples.slice(4000,5000).every(x=>Math.abs(x)<1e-8));
+  p.modulation.carrierLoop=true;result=await render(p,assets);
+  assert.ok(toneAmplitude(result.samples,48000,2000,.07,.10)>.47);
+});
+test('volume follower attack, offset, and dry fallback have distinct audible behavior',async()=>{
+  const p=project();p.duration=.15;p.voices[0].hz=1000;p.assets=['level'];
+  p.modulation={...p.modulation,enabled:true,mode:'volume',target:'mix',sourceId:'level',depth:1,attack:.01,release:.03,offset:.02};
+  const a=new Float32Array(4800).fill(.5),out=await render(p,{level:{sampleRate:48000,samples:a}});
+  const early=toneAmplitude(out.samples,48000,1000,.024,.029),settled=toneAmplitude(out.samples,48000,1000,.07,.09),outside=toneAmplitude(out.samples,48000,1000,.13,.14);
+  assert.ok(early<settled);assert.ok(settled>.32&&settled<.37);assert.ok(outside>.65);
+});

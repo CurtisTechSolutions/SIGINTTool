@@ -217,4 +217,5 @@ refresh();
 
 import { installLibrary } from './library.js';
 import { installAudioLibrary } from './audio-library.js';
-app.ready=installLibrary(app).then(()=>installAudioLibrary(app));
+import { installModulation } from './modulation-ui.js';
+app.ready=installLibrary(app).then(()=>{installAudioLibrary(app);installModulation(app);});
