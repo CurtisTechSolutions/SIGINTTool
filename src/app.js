@@ -18,9 +18,9 @@ export function element(tag,attrs={},...children){
   return node;
 }
 const history=new History(project()),renderer=new Renderer(),changes=new Set(),cache=new Map();
-let playing=false,intent=0,lastRender=null,bypass=false;
+let playing=false,playingTag='editor',intent=0,lastRender=null,bypass=false,renderQueue=Promise.resolve();
 const view={tool:'pencil',zoom:1,pan:0,snap:false,only:false,hidden:new Set()};
-const transport=new Transport((state,tag)=>{playing=state==='playing';$('#play').textContent=playing?'↻ Restart':'▶ Play';$('#play').setAttribute('aria-label',playing?'Restart playback':'Play sound');$('#transport-state').textContent=playing?'Playing '+(tag==='editor'?'current sound':tag):'Stopped';});
+const transport=new Transport((state,tag)=>{playing=state==='playing';playingTag=tag||playingTag;$('#play').textContent=playing?'↻ Restart':'▶ Play';$('#play').setAttribute('aria-label',playing?'Restart playback':'Play sound');$('#transport-state').textContent=playing?'Playing '+(tag==='editor'?'current sound':tag):'Stopped';});
 export const app={
   get project(){return history.current;},get lastRender(){return lastRender;},assets:{},
   element,transport,renderer,
@@ -36,7 +36,9 @@ export const app={
       const rate=await transport.enable();if(token!==intent)return;
       const snapshot=clone(app.project);
       app.status('Rendering sound…');$('#render-progress').hidden=false;
-      const result=await renderer.run(snapshot,app.assets,{rate,bypass:options.bypass??bypass,progress:n=>{$('#render-progress').value=n;}});
+      const assets=app.prepareAssets?await app.prepareAssets(snapshot):app.assets;
+      if(token!==intent)return;
+      const result=await renderer.run(snapshot,assets,{rate,bypass:options.bypass??bypass,progress:n=>{$('#render-progress').value=n;}});
       if(token!==intent)return;
       lastRender=result;transport.setVolume(snapshot.monitor);transport.play(result,{loop:snapshot.loop});
       app.status('Playing · '+result.warnings.join(' · '));inspectOutput();
@@ -45,9 +47,12 @@ export const app={
   },
   async renderSnapshot(snapshot,rate){
     renderer.cancel();
-    const worker=new Renderer();
-    try{return await worker.run(snapshot,app.assets,{rate,progress:n=>app.status('Preparing audio '+Math.round(n*100)+'%…')});}
-    finally{worker.cancel();}
+    renderQueue=renderQueue.catch(()=>{}).then(async()=>{
+      const assets=app.prepareAssets?await app.prepareAssets(snapshot):app.assets,worker=new Renderer();
+      try{return await worker.run(snapshot,assets,{rate,progress:n=>app.status('Preparing audio '+Math.round(n*100)+'%…')});}
+      finally{worker.cancel();}
+    });
+    return renderQueue;
   },
   refresh,addPanel(title){
     const panel=element('section',{class:'panel extra-panel'},element('h2',{text:title}));
@@ -63,7 +68,7 @@ function data(v){
   const next={voice:v,samples,analysis:analyze(samples,v.hz,v.harmonics)};cache.set(v.id,next);return next;
 }
 function changed(){
-  const wasPlaying=playing;intent++;renderer.cancel();
+  const wasPlaying=playing&&playingTag==='editor';intent++;renderer.cancel();
   lastRender=null;refresh();for(const fn of changes)fn(app.project);
   if(wasPlaying)app.play();else app.status('Updated. Press Play to hear the result.');
 }
@@ -164,7 +169,7 @@ function inspectOutput(){
 function refresh(){
   const active=document.activeElement?.dataset.key,p=app.project,v=selected();
   for(const key of cache.keys())if(!p.voices.some(v=>v.id===key))cache.delete(key);
-  refreshVoices();refreshControls();inspect();
+  refreshVoices();refreshControls();inspect();if(lastRender)inspectOutput();
   $('#project-name').value=p.name;$('#monitor').value=p.monitor;$('#monitor-value').textContent=Math.round(p.monitor*100)+'%';transport.setVolume(p.monitor);
   $('#envelopes').hidden=p.mode!=='envelope';
   document.querySelectorAll('[data-mode]').forEach(b=>{b.setAttribute('aria-selected',String(b.dataset.mode===p.mode));b.classList.toggle('active',b.dataset.mode===p.mode);});
@@ -190,8 +195,8 @@ document.querySelectorAll('[data-tool]').forEach(b=>{b.onclick=()=>{view.tool=b.
 $('#undo').onclick=()=>{if(history.undo())changed();};$('#redo').onclick=()=>{if(history.redo())changed();};
 $('#clear').onclick=()=>app.edit(p=>{if(p.mode==='timeline')p.timeline.strokes=[];else p.voices.find(v=>v.id===p.selectedId).waveform.strokes=[];});
 $('#only').onchange=e=>{view.only=e.target.checked;draw();};$('#snap').onchange=e=>{view.snap=e.target.checked;};
-$('#zoom').oninput=e=>{view.zoom=Number(e.target.value);view.pan=Math.min(view.pan,1-1/view.zoom);$('#pan').max=1-1/view.zoom;$('#pan').value=view.pan;$('#zoom-value').textContent=view.zoom+'×';draw();};
-$('#pan').oninput=e=>{view.pan=Number(e.target.value);draw();};
+$('#zoom').oninput=e=>{view.zoom=Number(e.target.value);view.pan=Math.min(view.pan,1-1/view.zoom);$('#pan').max=1-1/view.zoom;$('#pan').value=view.pan;$('#zoom-value').textContent=view.zoom+'×';refresh();};
+$('#pan').oninput=e=>{view.pan=Number(e.target.value);refresh();};
 $('#bypass').onchange=e=>{bypass=e.target.checked;if(playing)app.play();};
 $('#point-lane').onchange=e=>{$('#point-value').value=e.target.value==='pitch'?440:e.target.value==='gain'?1:0;};
 $('#point-form').onsubmit=e=>{
@@ -209,3 +214,6 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('beforeunload',()=>{renderer.cancel();transport.stop();});
 refresh();
+
+import { installLibrary } from './library.js';
+app.ready=installLibrary(app);
