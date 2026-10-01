@@ -15,7 +15,7 @@ export async function installLibrary(app){
     if(p.assets.some(k=>!result[k]))throw new Error('A required audio source is missing. Restore its project bundle.');
     return result;
   };
-  async function refreshEntries(){entries=(await store.list('sounds')).sort((a,b)=>a.order-b.order);renderBoard();}
+  async function refreshEntries(){entries=(await store.list('sounds')).sort((a,b)=>a.order-b.order);renderBoard();window.dispatchEvent(new Event('sigint-library-change'));}
   function retain(asset){cache.delete(asset.id);cache.set(asset.id,asset);cacheBytes=[...cache.values()].reduce((n,a)=>n+a.samples.byteLength,0);while(cacheBytes>8*1024**2&&cache.size>1){const key=cache.keys().next().value;cacheBytes-=cache.get(key).samples.byteLength;cache.delete(key);}return asset;}
   async function clip(key){if(cache.has(key))return retain(cache.get(key));const a=await store.get('audio',key);if(!a)throw new Error('Saved audio is missing. Open its project and save a new render.');return retain(a);}
   async function play(entry){
