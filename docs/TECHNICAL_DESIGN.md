@@ -25,7 +25,7 @@ flowchart LR
     E --> F
     E --> G[Equation and reconstruction views]
     F --> H[Playback and rendered-output view]
-    D --> I[Exports and local projects]
+    D --> I[Exports, local projects, and soundboard]
     E --> I
     F --> I
 ~~~
@@ -64,7 +64,8 @@ Suggested modules:
 | audio | Audio context lifecycle, source graph, conditioning, transitions |
 | worker | Revisioned jobs, cancellation, progress, transfer ownership |
 | export | WAV, CSV, JSON, coefficient and function generation |
-| storage | IndexedDB persistence, schema migrations, atomic imports |
+| storage | IndexedDB persistence, schema migrations, atomic imports and saved-sound transactions |
+| soundboard | Named snapshot/clip entries, pad controls, playback coordination, bounded prepared-audio cache |
 | ui | Controls, view selection, accessible status and explanations |
 
 Proposed persisted project fields:
@@ -260,3 +261,38 @@ Test two identical in-phase oscillators, opposite-phase cancellation, different-
 The product requirements now include waveform/pitch/volume drawing and distinct oscillator colors. The four-voice limit, resource budgets, browser baseline, palette, and exact renderer/filter remain proposed engineering decisions.
 
 The foundation spike must cover the full four-voice envelope case before its engine choice is considered settled. If performance requires a lower resolution, a different renderer, or a different limit, document the measurement and update the PRD and issues explicitly instead of silently discarding drawing detail or envelope behavior.
+
+
+## 12. Named soundboard snapshots and replay
+
+Save the currently included mix or standalone Timeline output as a finite, named sound. Capture the source revision, all oscillator/lane settings, inclusion state, active mode, render rate/duration, and algorithm version before the render begins. A saved entry is independent of the live autosaved project.
+
+Suggested entry contract:
+
+~~~text
+SoundboardEntry {
+  id, name, order, createdAt, updatedAt,
+  schemaVersion, algorithmVersion, sourceMode,
+  projectSnapshot, renderSettings,
+  durationSeconds, sampleRate, channelCount: 1, frameCount,
+  audioAssetId, gainStage: "pre-monitor"
+}
+~~~
+
+Persist metadata/project snapshots and rendered Float32 audio in IndexedDB object stores joined by entry/asset IDs. IndexedDB supports structured data, binary assets, and transactions; this makes it a suitable proposed store for saved sounds. [IndexedDB reference](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
+
+Complete rendering/validation first, then use a short transaction to commit the snapshot, audio asset, and entry metadata together. Do not keep a transaction open while waiting for a worker render. On a failed create/update, preserve the previous board state and current project. Use a pending-save token to prevent accidental duplicate entries; names are editable labels, not primary keys.
+
+The cached clip includes voice selection, phase, envelopes, mixing, bandwidth processing, headroom, and finite boundary treatment. It excludes monitor gain. Pad playback applies the current shared monitor gain once; the saved project's monitor setting remains editable metadata. WAV downloads follow F09's rendered-output convention and apply the selected monitor setting once. This avoids the quieter-than-preview result caused by multiplying monitor gain into both cache and playback.
+
+Use a shared AudioContext and transport arbiter for editor and board playback. A pad plays the prepared buffer using a fresh AudioBufferSourceNode per trigger while reusing the AudioBuffer; source nodes are one-use playback objects. [AudioBufferSourceNode reference](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode). The initial policy is exclusive one-shot playback: a new pad stops editor preview and replaces any active pad. Use short complementary linear ramps for transitions; their summed gain must not introduce a new mix peak above the established ceiling.
+
+Give async load/prepare requests a trigger generation ID. Only the newest still-active trigger may start; Stop, a newer trigger, or navigation cancels the previous intent. Rendering or storage completion alone must never start audio. Reload restores metadata and stopped pads, not previous playback.
+
+Load the board's metadata list first. Keep a byte-bounded least-recently-used cache of prepared buffers within the existing working-set budget; releasing cached buffers must not delete persisted clips. A missing/corrupt asset shows a recoverable error and can be regenerated from its snapshot after explicit action; never silently replace a saved render using a different DSP version.
+
+Open in editor clones the saved snapshot into a working project and retains the displaced draft for recovery. Keep the saved entry unchanged until an explicit Update saved sound succeeds. Save as new sound assigns a new entry ID. Rename/reorder preserve audio identity; remove offers undo and manages both metadata and its audio asset.
+
+Per-entry project and WAV downloads provide portable backup through the existing adapters. Test at least 32 maximum-duration saved sounds without eagerly loading all full audio buffers; this is a validation workload, not a promised unlimited-storage guarantee. Browser quota failures remain recoverable and never justify silent deletion of other sounds.
+
+Validation covers snapshot isolation during concurrent editing, atomic save/update failure, rename/reorder/remove/undo, editor restoration, one-time monitor gain, prepared-pad latency, repeated trigger/Stop races, keyboard activation, and persistence across reload. A sound saved from the four-oscillator envelope mix is part of the integration fixtures.
