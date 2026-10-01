@@ -1,5 +1,7 @@
 # SIGINTTool technical design
 
+> Implementation is now available on `main`. These documents retain the agreed requirements and original design recommendations. Actual choices, supported boundaries and evidence are in [ENGINEERING_DECISIONS.md](ENGINEERING_DECISIONS.md) and [VALIDATION.md](VALIDATION.md); use [USER_GUIDE.md](USER_GUIDE.md) to run the app.
+
 **Status:** Proposed architecture for discussion, not implemented or benchmarked.  
 **Date:** 2026-09-30  
 **Product contract:** [PRD](PRD.md)  

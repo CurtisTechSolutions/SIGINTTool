@@ -1,5 +1,7 @@
 # SIGINTTool implementation plan
 
+> Implementation is now available on `main`. These documents retain the agreed requirements and original design recommendations. Actual choices, supported boundaries and evidence are in [ENGINEERING_DECISIONS.md](ENGINEERING_DECISIONS.md) and [VALIDATION.md](VALIDATION.md); use [USER_GUIDE.md](USER_GUIDE.md) to run the app.
+
 **Status:** Proposed first-release backlog; implementation has not started in this planning change.  
 **Date:** 2026-09-30  
 **Tracking issue:** [#1 — Product delivery plan](https://github.com/CurtisTechSolutions/SIGINTTool/issues/1)  
