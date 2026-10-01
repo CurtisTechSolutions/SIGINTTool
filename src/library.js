@@ -92,6 +92,7 @@ export async function installLibrary(app){
     }catch(e){app.status('Project was not opened: '+e.message,true);}finally{file.value='';}
   };
   app.onChange(p=>{
+    for(const key of Object.keys(app.assets))if(!p.assets.includes(key))delete app.assets[key];
     const revision=++saveRevision;clearTimeout(saveTimer);state.textContent='Draft has unsaved changes';
     saveTimer=setTimeout(async()=>{try{await store.saveProject('current',p,Object.values(await app.prepareAssets(p)));if(revision===saveRevision)state.textContent='Draft saved locally';}catch(e){if(revision===saveRevision)state.textContent='Draft not saved · '+e.message;}},350);
   });

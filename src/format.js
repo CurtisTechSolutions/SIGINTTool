@@ -28,17 +28,17 @@ export function unzip(bytes){
   const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),end=bytes.length-22;
   if(v.getUint32(end,true)!==0x06054b50||v.getUint16(end+20,true)!==0)throw new Error('Unsupported bundle directory');
   const count=v.getUint16(end+10,true),central=v.getUint32(end+16,true),centralSize=v.getUint32(end+12,true);
-  if(count>32||v.getUint16(end+8,true)!==count||central+centralSize!==end)throw new Error('Invalid bundle entry limit or directory');
+  if(v.getUint16(end+4,true)!==0||v.getUint16(end+6,true)!==0||count>32||v.getUint16(end+8,true)!==count||central+centralSize!==end)throw new Error('Invalid bundle entry limit or directory');
   const entries=Object.create(null);let pos=central,total=0;
   for(let i=0;i<count;i++){
     if(pos+46>end||v.getUint32(pos,true)!==0x02014b50)throw new Error('Invalid bundle entry');
     const flags=v.getUint16(pos+8,true),method=v.getUint16(pos+10,true),crc=v.getUint32(pos+16,true),size=v.getUint32(pos+20,true),expanded=v.getUint32(pos+24,true),length=v.getUint16(pos+28,true),extra=v.getUint16(pos+30,true),comment=v.getUint16(pos+32,true),local=v.getUint32(pos+42,true);
-    if(method!==0||flags!==0x800||size!==expanded)throw new Error('Use a SIGINT bundle with stored PCM entries');
+    if(v.getUint16(pos+34,true)!==0||method!==0||flags!==0x800||size!==expanded)throw new Error('Use a SIGINT bundle with stored PCM entries');
     if(pos+46+length+extra+comment>end||local+30>=central)throw new Error('Truncated bundle');
     const name=decoder.decode(bytes.subarray(pos+46,pos+46+length));
     if(!/^(project\.json|manifest\.json|audio\/[a-zA-Z0-9_-]+\.f32)$/.test(name)||Object.hasOwn(entries,name))throw new Error('Unsafe or duplicate bundle path');
     total+=expanded;if(total>64*1024**2)throw new Error('Bundle exceeds extracted byte limit');
-    if(v.getUint32(local,true)!==0x04034b50||v.getUint16(local+8,true)!==0||v.getUint32(local+18,true)!==size||v.getUint32(local+22,true)!==size)throw new Error('Mismatched bundle header');
+    if(v.getUint16(local+6,true)!==flags||v.getUint32(local,true)!==0x04034b50||v.getUint16(local+8,true)!==0||v.getUint32(local+18,true)!==size||v.getUint32(local+22,true)!==size)throw new Error('Mismatched bundle header');
     const n=v.getUint16(local+26,true),x=v.getUint16(local+28,true),start=local+30+n+x;
     if(start+size>central||decoder.decode(bytes.subarray(local+30,local+30+n))!==name)throw new Error('Invalid bundle data extent');
     const data=bytes.subarray(start,start+size);if(crc32(data)!==crc||v.getUint32(local+14,true)!==crc)throw new Error('Corrupt bundle checksum');

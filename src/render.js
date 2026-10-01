@@ -51,7 +51,7 @@ export async function render(input,assets={},options={}) {
   const source=enabled?assetAt(assets,m.sourceId):null;
   const carrier=route&&m.target==='asset'?assetAt(assets,m.carrierId):null;
   const needsCopy=enabled&&m.mode==='pitch'&&m.target==='mix';
-  if(n*OVERSAMPLE*8*(needsCopy?2:1)+n*4+Object.values(assets).reduce((s,a)=>s+(a.samples?.byteLength||0),0)>96*1024**2)throw new Error('Render exceeds the 128 MiB working-buffer budget');
+  if(n*OVERSAMPLE*8*(needsCopy?2:1)+n*(options.includeSource?12:4)+Object.values(assets).reduce((s,a)=>s+(a.samples?.byteLength||0),0)>96*1024**2)throw new Error('Render exceeds the 128 MiB working-buffer budget');
   const raw=new Float64Array(n*OVERSAMPLE),voices=p.mode==='timeline'?[]:includedVoices(p).map(v=>({v,...waveform(v),curve:pitchCurve(v.pitch,T,v.hz),phase:v.phase}));
   const warnings=new Set();
   if(p.mode==='timeline'){
@@ -64,7 +64,7 @@ export async function render(input,assets={},options={}) {
   for(let block=0;block<raw.length;block+=16384){
     if(options.signal?.aborted)throw new DOMException('Canceled','AbortError');
     for(let i=block;i<Math.min(raw.length,block+16384);i++){
-      const t=i/internal,state=enabled?sourceState(source,t,m):{value:0,availability:0};
+      const t=i/internal,state=enabled&&m.target==='oscillator'?sourceState(source,t,m):{value:0,availability:0};
       const amount=m.depth*state.availability,depth=m.semitones*state.availability;
       const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;
       let sum=raw[i];
@@ -76,7 +76,7 @@ export async function render(input,assets={},options={}) {
           const requested=base.hz*2**(depth*state.value/12);
           hz=clamp(requested,20,Math.min(20000,rate/2-1));
           if(hz!==requested)warnings.add('Effective pitch limited to supported frequency range');
-          phase=item.phase;item.phase+=hz/internal;
+          if(i>0)item.phase+=(item.previousHz+hz)/(2*internal);phase=item.phase;item.previousHz=hz;
         }
         const h=Math.floor((rate/2-1)/hz);
         const index=h<1?-1:v.source==='sine'?(h<item.data.sine.harmonic?-1:Math.ceil(Math.log2(item.data.sine.harmonic))):Math.min(item.tables.length-1,Math.floor(Math.log2(h)));
@@ -95,17 +95,18 @@ export async function render(input,assets={},options={}) {
   }
   if(route&&m.target!=='oscillator'){
     const dry=needsCopy?raw.slice():raw;
-    let position=0;follower=0;
+    let position=0,previousRatio=1;follower=0;
     for(let block=0;block<raw.length;block+=16384){
       if(options.signal?.aborted)throw new DOMException('Canceled','AbortError');
       for(let i=block;i<Math.min(raw.length,block+16384);i++){
         const t=i/internal,state=sourceState(source,t,m),amount=m.depth*state.availability;
         const abs=Math.abs(state.value),a=abs>follower?attack:release;follower=a*follower+(1-a)*abs;
         const ratio=m.mode==='pitch'?2**(m.semitones*state.availability*state.value/12):1;
+        if(i>0)position+=(previousRatio+ratio)/(2*internal);previousRatio=ratio;
         let value=carrier?readClip(carrier.samples,position,carrier.sampleRate,m.carrierLoop):needsCopy?readClip(dry,position,internal,m.carrierLoop):dry[i];
         if(m.mode==='ring')value*=1-amount+amount*state.value;
         if(m.mode==='volume')value*=1-amount+amount*follower;
-        raw[i]=value;position+=ratio/internal;
+        raw[i]=value;
       }
       options.progress?.(.5+.3*Math.min(1,(block+16384)/raw.length));
       await new Promise(r=>setTimeout(r,0));

@@ -91,6 +91,32 @@ try {
       await fresh.getByRole('button',{name:'Play sound',exact:true}).click();
       await fresh.waitForFunction(()=>!!window.testApp.lastRender);assert.ok(await fresh.evaluate(()=>window.testApp.lastRender.peak>0));
       await portable.close();
+      if(name==='chromium'){
+        await page.addScriptTag({path:'node_modules/axe-core/axe.min.js'});
+        const violations=await page.evaluate(async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}});return r.violations.map(v=>({id:v.id,impact:v.impact,nodes:v.nodes.map(n=>n.target)}));});
+        assert.deepEqual(violations,[]);
+        const stress=await page.evaluate(async()=>{
+          const app=window.testApp,{project}=await import('/src/model.js');
+          for(let k=0;k<31;k++){
+            const p=project();p.duration=10;p.name='Capacity '+k;p.voices[0].hz=220+k;
+            const samples=Float32Array.from({length:480000},(_,i)=>.3*Math.sin(2*Math.PI*p.voices[0].hz*i/48000));
+            await app.store.saveSound(p,{samples,sampleRate:48000,duration:10},[]);
+          }
+          let pcmReads=0;const get=app.store.get.bind(app.store);app.store.get=(name,...args)=>{if(name==='audio')pcmReads++;return get(name,...args);};
+          await app.library.refresh();const listingReads=pcmReads;app.store.get=get;
+          const entry=app.library.entries.find(e=>e.duration<1),times=[];
+          await app.library.play(entry);app.stop();
+          for(let i=0;i<100;i++){const t=performance.now();await app.library.play(entry);times.push(performance.now()-t);app.stop();}
+          await new Promise(r=>setTimeout(r,100));
+          const nodes=app.transport.nodes.size;
+          const pending=app.play();app.stop();await pending;
+          await new Promise(r=>setTimeout(r,100));
+          return {count:app.library.entries.length,listingReads,nodes,afterCancel:app.transport.nodes.size,padP95Ms:times.sort((a,b)=>a-b)[94]};
+        });
+        assert.equal(stress.count,32);assert.equal(stress.listingReads,0);assert.equal(stress.nodes,0);assert.equal(stress.afterCancel,0);console.log('BROWSER_STRESS:'+JSON.stringify(stress));
+        await page.setViewportSize({width:390,height:844});
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      }
       assert.deepEqual(errors,[]);
       if(name==='chromium')console.log('VISUAL:'+((await page.screenshot({type:'jpeg',quality:55,fullPage:true})).toString('base64')));
       console.log(name+': draw, voices, envelopes, undo/redo, worker audio, and Stop passed');
