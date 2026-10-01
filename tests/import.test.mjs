@@ -1,4 +1,7 @@
 import test from 'node:test';
+import { Worker } from 'node:worker_threads';
+// The browser distribution declares an optional worker subclass; decoding itself is synchronous here.
+globalThis.Worker=Worker;
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
