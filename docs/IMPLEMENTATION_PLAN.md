@@ -8,13 +8,13 @@
 
 ## Delivery objective
 
-Build a browser signal sketchpad that turns drawn waveforms into mathematical functions and sound. The first release includes drawing pitch and volume envelopes, multiple oscillators identified by distinct persistent colors, and a controlled mono mix.
+Build a browser signal sketchpad that turns drawn waveforms into mathematical functions and sound. The first release includes drawing pitch and volume envelopes, multiple oscillators identified by distinct persistent colors, a controlled mono mix, and a named soundboard for replay and later editing.
 
 Start with one oscillator and support up to four under the proposed initial resource budget. Each voice has its own waveform, model, phase, pitch/gain lanes, mute/solo, name, and color. Keep a standalone direct-amplitude Timeline mode as well as periodic and envelope-driven oscillator output.
 
 ## How to use the backlog
 
-Each issue has a user-visible outcome, bounded scope, measurable acceptance criteria, validation work, and explicit dependencies. F01–F15 map to the PRD sections. P0 establishes the core behavior; P1 completes the first release. Both priorities are release requirements.
+Each issue has a user-visible outcome, bounded scope, measurable acceptance criteria, validation work, and explicit dependencies. F01–F16 map to the PRD sections. P0 establishes the core behavior; P1 completes the first release. Both priorities are release requirements.
 
 The M0–M3 names below are delivery gates, not estimated dates or GitHub milestone objects. No assignees or release deadlines have been inferred.
 
@@ -33,8 +33,9 @@ The M0–M3 names below are delivery gates, not estimated dates or GitHub milest
 | F08 | [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12) Inspect source, approximation, rendered audio, and spectrum | P1 | M2 | [#5](https://github.com/CurtisTechSolutions/SIGINTTool/issues/5), [#6](https://github.com/CurtisTechSolutions/SIGINTTool/issues/6), [#7](https://github.com/CurtisTechSolutions/SIGINTTool/issues/7), [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9) |
 | F09 | [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13) Export WAV, samples, coefficients, and executable signal functions | P1 | M2 | [#5](https://github.com/CurtisTechSolutions/SIGINTTool/issues/5), [#6](https://github.com/CurtisTechSolutions/SIGINTTool/issues/6), [#7](https://github.com/CurtisTechSolutions/SIGINTTool/issues/7), [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9) |
 | F10 | [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14) Save projects locally and validate portable project imports | P1 | M2 | [#2](https://github.com/CurtisTechSolutions/SIGINTTool/issues/2), [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#4](https://github.com/CurtisTechSolutions/SIGINTTool/issues/4), [#10](https://github.com/CurtisTechSolutions/SIGINTTool/issues/10), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9) |
-| F11 | [#15](https://github.com/CurtisTechSolutions/SIGINTTool/issues/15) Complete accessible onboarding, explanations, and recovery states | P1 | M3 | [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14) |
-| F12 | [#16](https://github.com/CurtisTechSolutions/SIGINTTool/issues/16) Validate numerical fidelity, browser audio, and release performance | P1 | M3 | [#2](https://github.com/CurtisTechSolutions/SIGINTTool/issues/2), [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#4](https://github.com/CurtisTechSolutions/SIGINTTool/issues/4), [#5](https://github.com/CurtisTechSolutions/SIGINTTool/issues/5), [#6](https://github.com/CurtisTechSolutions/SIGINTTool/issues/6), [#7](https://github.com/CurtisTechSolutions/SIGINTTool/issues/7), [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14), [#15](https://github.com/CurtisTechSolutions/SIGINTTool/issues/15), [#10](https://github.com/CurtisTechSolutions/SIGINTTool/issues/10), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9) |
+| F16 | [#18](https://github.com/CurtisTechSolutions/SIGINTTool/issues/18) Save named sounds to a persistent soundboard and replay them | P1 | M2 | [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14) |
+| F11 | [#15](https://github.com/CurtisTechSolutions/SIGINTTool/issues/15) Complete accessible onboarding, explanations, and recovery states | P1 | M3 | [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14), [#18](https://github.com/CurtisTechSolutions/SIGINTTool/issues/18) |
+| F12 | [#16](https://github.com/CurtisTechSolutions/SIGINTTool/issues/16) Validate numerical fidelity, browser audio, and release performance | P1 | M3 | [#2](https://github.com/CurtisTechSolutions/SIGINTTool/issues/2), [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#4](https://github.com/CurtisTechSolutions/SIGINTTool/issues/4), [#5](https://github.com/CurtisTechSolutions/SIGINTTool/issues/5), [#6](https://github.com/CurtisTechSolutions/SIGINTTool/issues/6), [#7](https://github.com/CurtisTechSolutions/SIGINTTool/issues/7), [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14), [#15](https://github.com/CurtisTechSolutions/SIGINTTool/issues/15), [#10](https://github.com/CurtisTechSolutions/SIGINTTool/issues/10), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9), [#18](https://github.com/CurtisTechSolutions/SIGINTTool/issues/18) |
 
 ## M0 — Foundation and technical evidence
 
@@ -48,11 +49,13 @@ Complete [#3](https://github.com/CurtisTechSolutions/SIGINTTool/issues/3), [#4](
 
 This is an internal vertical slice; it does not reduce the first-release requirement for envelopes and multiple colored oscillators.
 
-## M2 — Envelopes, oscillator identity, and reuse
+## M2 — Envelopes, oscillator identity, soundboard, and reuse
 
-Complete [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9), [#10](https://github.com/CurtisTechSolutions/SIGINTTool/issues/10), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14). Deliver finite signals; persistent colors and independent voice editing; synchronized pitch/gain drawing; phase-continuous synthesis; source/model/mix inspection; reproducible exports; and local project round trips.
+Complete [#8](https://github.com/CurtisTechSolutions/SIGINTTool/issues/8), [#9](https://github.com/CurtisTechSolutions/SIGINTTool/issues/9), [#10](https://github.com/CurtisTechSolutions/SIGINTTool/issues/10), [#11](https://github.com/CurtisTechSolutions/SIGINTTool/issues/11), [#12](https://github.com/CurtisTechSolutions/SIGINTTool/issues/12), [#13](https://github.com/CurtisTechSolutions/SIGINTTool/issues/13), [#14](https://github.com/CurtisTechSolutions/SIGINTTool/issues/14), [#18](https://github.com/CurtisTechSolutions/SIGINTTool/issues/18). Deliver finite signals; persistent colors and independent voice editing; synchronized pitch/gain drawing; phase-continuous synthesis; source/model/mix inspection; reproducible exports; local project round trips; and named soundboard save/replay/edit workflows.
 
 Oscillator colors are consistent across waveform, pitch, volume, controls, and legend. Labels and line cues supplement color. Plot visibility is independent of mute. Mixed audio and exported functions reflect the same included voices and envelope settings.
+
+Saved sounds contain both the rendered clip and an independent project snapshot. Pad replay uses a pre-monitor cache and applies current master gain once. Save/update failures preserve prior entries; working-copy edits do not change saved sounds implicitly.
 
 ## M3 — Release candidate
 
@@ -69,6 +72,8 @@ Keep implementation issues open until their actual acceptance criteria pass. Mer
 - Source, approximation, and rendered views share revision/settings; stale jobs never restart stopped audio.
 - WAV/CSV/JSON outputs identify their source, units, rate, duration, carrier/envelope data, inclusion state, and processing.
 - Round-tripped projects preserve all workspaces, oscillator colors/IDs, and editable lane data.
+- Soundboard entries survive reload, preserve saved versions during editing, replay without double gain, and support keyboard management and per-entry portable downloads.
+- Prepared pad latency, cancellation, and bounded cache use are measured with 32 maximum-duration saved sounds.
 - The PRD's responsiveness, memory, bandwidth, browser, and five-person first-use targets have recorded evidence.
 
 ## Decisions intentionally left to the foundation spike
